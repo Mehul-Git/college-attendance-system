@@ -83,31 +83,31 @@ function SetupAdmin() {
     setError('');
     return true;
   };
-const handleSubmit = async () => {
-  setLoading(true);
-  setError('');
 
-  try {
-    const response = await API.post('/auth/setup-admin', {
-      name: formData.name.trim(),
-      email: formData.email.toLowerCase().trim(),
-      password: formData.password, // ✅ PLAIN PASSWORD
-      collegeName: formData.collegeName.trim(),
-      collegeAddress: formData.collegeAddress.trim()
-    });
+  const handleSubmit = async () => {
+    setLoading(true);
+    setError('');
 
-    localStorage.setItem('token', response.data.token);
-    localStorage.setItem('user', JSON.stringify(response.data.user));
+    try {
+      const response = await API.post('/auth/setup-admin', {
+        name: formData.name.trim(),
+        email: formData.email.toLowerCase().trim(),
+        password: formData.password, // ✅ PLAIN PASSWORD
+        collegeName: formData.collegeName.trim(),
+        collegeAddress: formData.collegeAddress.trim()
+      });
 
-    setSuccess(true);
-    setTimeout(() => navigate('/admin/dashboard'), 3000);
-  } catch (err) {
-    setError(err.response?.data?.message || 'Setup failed. Please try again.');
-  } finally {
-    setLoading(false);
-  }
-};
+      localStorage.setItem('token', response.data.token);
+      localStorage.setItem('user', JSON.stringify(response.data.user));
 
+      setSuccess(true);
+      setTimeout(() => navigate('/admin/dashboard'), 3000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Setup failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Password strength indicator
   const getPasswordStrength = (password) => {
@@ -269,8 +269,8 @@ const handleSubmit = async () => {
             </div>
             
             <p className="text-gray-600">
-              Provide details about your college. This information will be used for attendance geofencing.
-            </p>
+              Provide details about your college. This information will be displayed in reports and analytics.
+            </p> {/* Updated text */}
             
             <div className="space-y-4">
               <div>
@@ -303,36 +303,7 @@ const handleSubmit = async () => {
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Campus Latitude (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    name="campusLat"
-                    value={formData.campusLat || '28.6139'}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                    placeholder="e.g., 28.6139"
-                  />
-                  <p className="text-sm text-gray-500 mt-1">For attendance geofencing</p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Campus Longitude (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    name="campusLon"
-                    value={formData.campusLon || '77.2090'}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                    placeholder="e.g., 77.2090"
-                  />
-                </div>
-              </div>
+              {/* REMOVED: Latitude/Longitude fields completely */}
             </div>
           </div>
         );
@@ -380,7 +351,7 @@ const handleSubmit = async () => {
                     <li>You will have access to all system features</li>
                     <li>Keep your credentials secure and confidential</li>
                     <li>Use this account to create other admin accounts</li>
-                    <li>Set up college location for attendance geofencing</li>
+                    <li>Attendance uses real-time GPS from teacher and student devices</li> {/* Updated */}
                   </ul>
                 </div>
               </div>

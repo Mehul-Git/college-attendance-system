@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FaUser, FaLock, FaExclamationTriangle } from 'react-icons/fa';
+import { FaUser, FaLock, FaExclamationTriangle, FaFingerprint } from 'react-icons/fa';
 import API from '../services/api';
+import { getDeviceId, resetDeviceId } from '../utils/device'; // Import from utils
 
 function Login() {
   const navigate = useNavigate();
@@ -17,6 +18,26 @@ function Login() {
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [deviceInfo, setDeviceInfo] = useState(null);
+
+  // Initialize device info on component mount
+  useEffect(() => {
+    const initDevice = async () => {
+      if (formData.role === 'student') {
+        try {
+          const deviceId = getDeviceId();
+          setDeviceInfo({
+            id: deviceId,
+            shortId: deviceId.substring(0, 20) + '...'
+          });
+        } catch (err) {
+          console.error('Failed to get device ID:', err);
+        }
+      }
+    };
+    
+    initDevice();
+  }, [formData.role]);
 
   const handleChange = (e) => {
     setFormData({
@@ -31,15 +52,37 @@ function Login() {
     setLoading(true);
 
     try {
-      const response = await API.post('/auth/login', {
+      // Get device fingerprint for student login
+      let deviceId = null;
+      if (formData.role === 'student') {
+        deviceId = getDeviceId();
+        console.log('📱 Login with Device Fingerprint:', deviceId.substring(0, 30) + '...');
+      }
+
+      const loginData = {
         email: formData.email.toLowerCase().trim(),
-        password: formData.password, // ✅ PLAIN PASSWORD
-        role: formData.role
+        password: formData.password,
+        role: formData.role,
+        deviceId: deviceId // Send device fingerprint
+      };
+
+      console.log('📤 Login request:', {
+        email: loginData.email,
+        role: loginData.role,
+        deviceId: deviceId ? deviceId.substring(0, 20) + '...' : 'none'
       });
+
+      const response = await API.post('/auth/login', loginData);
+      console.log('✅ Login successful');
 
       // Save auth data
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
+
+      // Update deviceId from response if provided
+      if (response.data.user?.deviceId) {
+        localStorage.setItem('deviceFingerprint', response.data.user.deviceId);
+      }
 
       // Clear password from memory
       setFormData((prev) => ({ ...prev, password: '' }));
@@ -59,10 +102,38 @@ function Login() {
           navigate('/');
       }
     } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          'Login failed. Please check your credentials.'
-      );
+      console.error('❌ Login error:', err.response?.data);
+      
+      let errorMessage = err.response?.data?.message || 'Login failed. Please check your credentials.';
+      
+      // Better device error messages
+      if (errorMessage.includes('device') || errorMessage.includes('Device')) {
+        errorMessage = (
+          <div>
+            <p className="font-medium">{errorMessage}</p>
+            <p className="text-sm mt-2 text-red-600">
+              This means you're trying to login from a different device/browser than the one you registered with.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                resetDeviceId();
+                const newId = getDeviceId();
+                setDeviceInfo({
+                  id: newId,
+                  shortId: newId.substring(0, 20) + '...'
+                });
+                alert('Device fingerprint reset. Try logging in again.');
+              }}
+              className="mt-2 px-3 py-1 bg-red-100 text-red-700 text-sm rounded hover:bg-red-200"
+            >
+              Reset Device Fingerprint
+            </button>
+          </div>
+        );
+      }
+      
+      setError(errorMessage);
       setFormData((prev) => ({ ...prev, password: '' }));
     } finally {
       setLoading(false);
@@ -88,13 +159,37 @@ function Login() {
                 Please select your role from the home page
               </p>
             )}
+            {formData.role === 'student' && (
+              <p className="text-sm text-green-600 mt-1 flex items-center justify-center gap-1">
+                <FaFingerprint />
+                Device fingerprinting enabled
+              </p>
+            )}
           </div>
+
+          {/* Device Info */}
+          {formData.role === 'student' && deviceInfo && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <FaFingerprint className="text-blue-600" />
+                <span className="text-sm font-medium text-blue-800">Device Fingerprint</span>
+              </div>
+              <p className="text-xs text-blue-700 break-all">
+                {deviceInfo.shortId}
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                This unique ID identifies your device for secure login.
+              </p>
+            </div>
+          )}
 
           {/* Error */}
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg flex items-start gap-3">
-              <FaExclamationTriangle className="text-red-500 mt-1 flex-shrink-0" />
-              <p className="text-red-700">{error}</p>
+            <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
+              <div className="flex items-start gap-3">
+                <FaExclamationTriangle className="text-red-500 mt-1 flex-shrink-0" />
+                <div className="flex-1 text-red-700">{error}</div>
+              </div>
             </div>
           )}
 
@@ -170,10 +265,21 @@ function Login() {
                 className={`w-full py-3 px-4 rounded-lg font-semibold text-white transition-all ${
                   loading || !formData.role
                     ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700'
+                    : formData.role === 'admin' 
+                      ? 'bg-red-600 hover:bg-red-700'
+                      : formData.role === 'teacher'
+                        ? 'bg-purple-600 hover:bg-purple-700'
+                        : 'bg-green-600 hover:bg-green-700'
                 }`}
               >
-                {loading ? 'Authenticating...' : 'Login'}
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Authenticating...
+                  </span>
+                ) : (
+                  `Login as ${formData.role}`
+                )}
               </button>
             </div>
           </form>
@@ -181,7 +287,9 @@ function Login() {
           {/* Footer */}
           <div className="mt-8 pt-6 border-t border-gray-200 text-center">
             <p className="text-xs text-gray-500">
-              🔒 Credentials are securely transmitted over HTTPS
+              {formData.role === 'student' 
+                ? '🔒 Device-locked security enabled' 
+                : '🔒 Secure authentication'}
             </p>
           </div>
         </div>

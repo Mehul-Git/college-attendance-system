@@ -3,14 +3,16 @@ import AdminSidebar from './AdminSidebar';
 
 function AdminLayout({ children }) {
   return (
-    <div className="min-h-screen flex bg-gray-100">
-      {/* Sidebar */}
+    <div className="flex bg-gray-100 min-h-screen">
+      {/* Fixed Sidebar */}
       <AdminSidebar />
-
-      {/* Main content */}
-      <div className="flex-1 p-6">
-        {children}
-      </div>
+      
+      {/* Main content with independent scrolling */}
+      <main className="ml-64 flex-1 overflow-y-auto h-screen">
+        <div className="p-6">
+          {children}
+        </div>
+      </main>
     </div>
   );
 }

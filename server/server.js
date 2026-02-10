@@ -1,6 +1,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
+
 require('dotenv').config();
 
 // ===== IMPORT ROUTES =====
@@ -8,8 +10,14 @@ const authRoutes = require('./routes/auth.routes');
 const departmentRoutes = require('./routes/department.routes');
 const teacherRoutes = require('./routes/teacher.routes');
 const studentRoutes = require('./routes/student.routes');
+const subjectRoutes = require('./routes/subject.routes');
+const attendanceRoutes = require('./routes/attendance.routes');
+const classScheduleRoutes = require('./routes/classSchedule.routes');
+const attendanceReportRoutes = require('./routes/attendanceReport.routes');
+
 
 const app = express();
+app.use(cookieParser()); // 👈 BEFORE routes
 
 // ===== GLOBAL MIDDLEWARE =====
 app.use(
@@ -70,6 +78,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/teachers', teacherRoutes);
 app.use('/api/students', studentRoutes);
+app.use('/api/subjects', subjectRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/class-schedules', classScheduleRoutes);
+app.use('/api/reports', attendanceReportRoutes);
 
 // ===== HEALTH CHECK =====
 app.get('/api/health', (req, res) => {

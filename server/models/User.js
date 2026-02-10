@@ -8,6 +8,7 @@ const userSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+
     email: {
       type: String,
       required: true,
@@ -15,62 +16,104 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+
     password: {
       type: String,
       required: true,
       select: false,
     },
+
     role: {
       type: String,
       enum: ['admin', 'teacher', 'student'],
       required: true,
     },
+
     department: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Department',
       default: null,
     },
+
+    semester: {
+      type: Number,
+      default: null,
+    },
+
+    section: {
+      type: String,
+      default: 'A',
+    },
+
     studentId: {
       type: String,
       unique: true,
       sparse: true,
     },
+
     collegeName: {
       type: String,
       default: '',
     },
+
     collegeAddress: {
       type: String,
       default: '',
     },
+
     isSuperAdmin: {
       type: Boolean,
       default: false,
     },
+
     isActive: {
       type: Boolean,
       default: true,
     },
-    lastLogin: Date,
+
+    currentSession: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AttendanceSession',
+      default: null,
+    },
+
+    deviceId: {
+      type: String,
+      default: null,
+    },
+
+    lastLogin: {
+      type: Date,
+    },
   },
   { timestamps: true }
 );
 
-// ✅ SIMPLE & CORRECT password hashing
+/* ============================
+   🔐 PASSWORD HASHING
+============================ */
 userSchema.pre('save', async function () {
+  // Only hash password if it was modified
   if (!this.isModified('password')) return;
-  this.password = await bcrypt.hash(this.password, 10);
+
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
 });
 
-// ✅ Compare password
+/* ============================
+   🔑 PASSWORD COMPARISON
+============================ */
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// ✅ Update last login
-userSchema.methods.updateLastLogin = async function () {
-  this.lastLogin = new Date();
-  await this.save({ validateBeforeSave: false });
-};
+/* ============================
+   🎓 STUDENT DEFAULT SEMESTER
+============================ */
+userSchema.pre('validate', function () {
+  if (this.role === 'student' && !this.semester) {
+    this.semester = 1;
+  }
+});
 
 module.exports = mongoose.model('User', userSchema);

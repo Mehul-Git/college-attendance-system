@@ -2,21 +2,23 @@ const express = require('express');
 const {
   createStudent,
   getStudents,
-  deleteStudent
+  deleteStudent,
+  updateStudent
 } = require('../controllers/studentController');
 
-const { protect } = require('../controllers/authController');
+const { protect, authorize } = require('../controllers/authController');
 
 const router = express.Router();
 
 // Admin protected
-router.use(protect);
+router.use(protect, authorize('admin'));
 
 router.route('/')
   .post(createStudent)
   .get(getStudents);
 
 router.route('/:id')
-  .delete(deleteStudent);
+  .delete(deleteStudent)
+  .patch(updateStudent);
 
 module.exports = router;

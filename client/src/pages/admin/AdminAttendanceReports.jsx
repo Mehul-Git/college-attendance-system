@@ -136,8 +136,6 @@ function AdminAttendanceReports() {
 
   // Get unique values from report for display
   const reportDepartments = [...new Set(report.map(r => r.department))];
-  const reportSemesters = [...new Set(report.map(r => r.semester))].filter(s => s);
-  const reportSections = [...new Set(report.map(r => r.section))].filter(s => s);
 
   // Helper functions to get names
   const getDepartmentName = (deptId) => {
@@ -367,16 +365,6 @@ function AdminAttendanceReports() {
                         {reportDepartments.length} dept(s)
                       </span>
                     )}
-                    {reportSemesters.length > 0 && (
-                      <span className="text-xs text-gray-500">
-                        • {reportSemesters.length} sem(s)
-                      </span>
-                    )}
-                    {reportSections.length > 0 && (
-                      <span className="text-xs text-gray-500">
-                        • {reportSections.length} sec(s)
-                      </span>
-                    )}
                   </div>
                 </div>
                 <div className="p-3 bg-blue-50 rounded-lg">
@@ -486,7 +474,7 @@ function AdminAttendanceReports() {
             </div>
           </div>
 
-          {/* Table */}
+          {/* Table - REMOVED Semester/Section Column */}
           <div className="bg-white rounded-xl shadow overflow-hidden mb-6">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -497,9 +485,6 @@ function AdminAttendanceReports() {
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Department
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Semester/Section
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Attendance
@@ -529,22 +514,6 @@ function AdminAttendanceReports() {
                         <div className="flex items-center text-sm">
                           <Building className="mr-2 text-gray-400" size={16} />
                           {getDepartmentName(r.department) || r.department || "N/A"}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          {r.semester && (
-                            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                              <GraduationCap className="mr-1" size={12} />
-                              Sem {r.semester}
-                            </span>
-                          )}
-                          {r.section && (
-                            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
-                              <Users className="mr-1" size={12} />
-                              Sec {r.section}
-                            </span>
-                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -614,7 +583,7 @@ function AdminAttendanceReports() {
             )}
           </div>
 
-          {/* Export Options */}
+          {/* Export Options - UPDATED CSV to remove Semester/Section */}
           <div className="bg-white rounded-xl shadow p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -629,13 +598,11 @@ function AdminAttendanceReports() {
                 <button
                   onClick={() => {
                     const csvContent = [
-                      ["Student ID", "Name", "Department", "Semester", "Section", "Present", "Total Classes", "Percentage", "Status"],
+                      ["Student ID", "Name", "Department", "Present", "Total Classes", "Percentage", "Status"],
                       ...report.map((r) => [
                         r.studentId,
                         r.name,
                         getDepartmentName(r.department) || r.department || "N/A",
-                        r.semester || "",
-                        r.section || "",
                         r.present,
                         r.total,
                         `${r.percentage}%`,

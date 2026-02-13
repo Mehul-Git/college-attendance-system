@@ -65,9 +65,9 @@ function StudentLayout() {
   };
 
   /* ============================
-     🧭 NAVIGATION
+     🧭 NAVIGATION - REMOVED MARK ATTENDANCE COMPLETELY
   ============================ */
-  const baseNavigation = [
+  const navigation = [
     {
       name: 'Dashboard',
       href: '/student/dashboard',
@@ -86,25 +86,7 @@ function StudentLayout() {
       icon: <FaUser className="w-5 h-5" />,
       current: location.pathname === '/student/profile',
     },
-    {
-      name: 'Settings',
-      href: '/student/settings',
-      icon: <FaCog className="w-5 h-5" />,
-      current: location.pathname === '/student/settings',
-    },
   ];
-
-  let navigation = [...baseNavigation];
-  // ➕ Inject Mark Attendance only when session exists
-  if (activeSession && !activeSession.hasMarked) {
-    navigation.splice(1, 0, {
-      name: 'Mark Attendance',
-      href: `/student/mark/${activeSession._id}`,
-      icon: <FaCalendarAlt className="w-5 h-5" />,
-      current: location.pathname.includes('/student/mark'),
-      badge: 'Live'
-    });
-  }
 
   const getGreeting = () => {
     const h = new Date().getHours();
@@ -174,7 +156,7 @@ function StudentLayout() {
               </div>
             </div>
 
-            {/* Mobile Navigation */}
+            {/* Mobile Navigation - Only Dashboard, History, Profile */}
             <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
               {navigation.map((item) => (
                 <Link
@@ -194,11 +176,6 @@ function StudentLayout() {
                     <span className="font-medium">{item.name}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {item.badge && (
-                      <span className="px-2 py-1 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold rounded-full">
-                        {item.badge}
-                      </span>
-                    )}
                     <FaChevronRight className="w-3 h-3 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-transform" />
                   </div>
                 </Link>
@@ -260,7 +237,7 @@ function StudentLayout() {
             </div>
           </div>
 
-          {/* Navigation */}
+          {/* Navigation - Only Dashboard, History, Profile */}
           <div className="flex-1 p-4 overflow-y-auto">
             <div className="mb-4">
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-3 mb-3">Navigation</h3>
@@ -285,11 +262,6 @@ function StudentLayout() {
                       <span className="font-medium">{item.name}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      {item.badge && (
-                        <span className="px-2 py-1 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold rounded-full animate-pulse">
-                          {item.badge}
-                        </span>
-                      )}
                       <FaChevronRight className={`w-3 h-3 transition-transform ${item.current ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1'}`} />
                     </div>
                   </Link>
@@ -297,19 +269,19 @@ function StudentLayout() {
               </nav>
             </div>
 
-            {/* Active Session Info */}
+            {/* Active Session Info - Informational Only, No Mark Button */}
             {activeSession && !activeSession.hasMarked && (
-              <div className="mt-6 p-4 bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-2xl">
+              <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="p-2 bg-gradient-to-r from-red-500 to-orange-500 rounded-lg">
+                  <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg">
                     <FaClock className="w-4 h-4 text-white" />
                   </div>
                   <div>
-                    <h4 className="font-semibold text-red-800">Active Session</h4>
-                    <p className="text-sm text-red-600">Hurry up! Time is running</p>
+                    <h4 className="font-semibold text-blue-800">Active Session</h4>
+                    <p className="text-sm text-blue-600">Attendance session in progress</p>
                   </div>
                 </div>
-                <div className="space-y-2 text-sm text-red-700">
+                <div className="space-y-2 text-sm text-blue-700">
                   <div className="flex items-center justify-between">
                     <span>Subject:</span>
                     <span className="font-medium">{activeSession.subject?.name || 'Class Session'}</span>
@@ -318,6 +290,9 @@ function StudentLayout() {
                     <span>Teacher:</span>
                     <span className="font-medium">{activeSession.teacher?.name || 'Not specified'}</span>
                   </div>
+                </div>
+                <div className="mt-3 text-xs text-blue-600 bg-white/50 p-2 rounded-lg">
+                  ⚠️ Attendance can only be marked from the Dashboard
                 </div>
               </div>
             )}

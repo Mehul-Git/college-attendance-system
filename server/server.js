@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 require('dotenv').config();
 
@@ -15,20 +17,36 @@ const attendanceRoutes = require('./routes/attendance.routes');
 const classScheduleRoutes = require('./routes/classSchedule.routes');
 const attendanceReportRoutes = require('./routes/attendanceReport.routes');
 
-
 const app = express();
-app.use(cookieParser()); // 👈 BEFORE routes
 
-// ===== GLOBAL MIDDLEWARE =====
+// ===== TRUST PROXY (FOR NGINX IN PRODUCTION) =====
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
+// ===== SECURITY MIDDLEWARE =====
+app.use(helmet());
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200, // limit each IP
+  message: 'Too many requests from this IP, please try again later.'
+});
+app.use(limiter);
+
+app.use(cookieParser());
+
+// ===== CORS CONFIG =====
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
   })
 );
 
+// ===== BODY PARSER =====
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -59,7 +77,7 @@ const connectDB = async () => {
     }
   } catch (error) {
     console.error('❌ MongoDB Connection Error:', error.message);
-    setTimeout(connectDB, 5000);
+    setTimeout(connectDB, 5000); // retry after 5s
   }
 };
 
@@ -112,25 +130,41 @@ app.use((req, res) => {
 
 // ===== GLOBAL ERROR HANDLER =====
 app.use((err, req, res, next) => {
-  console.error('🚨 ERROR:', err.message);
+  console.error('🚨 ERROR:', err.stack);
 
   res.status(err.statusCode || 500).json({
     success: false,
-    message: err.message || 'Internal Server Error'
+    message:
+      process.env.NODE_ENV === 'production'
+        ? 'Internal Server Error'
+        : err.message
   });
 });
 
 // ===== START SERVER =====
 const PORT = process.env.PORT || 5000;
+
 const server = app.listen(PORT, () => {
   console.log('\n🚀 Server running on port', PORT);
   console.log('🌍 Environment:', process.env.NODE_ENV || 'development');
-  console.log('🔐 Auth API:', `http://localhost:${PORT}/api/auth`);
-  console.log('🏫 Departments API:', `http://localhost:${PORT}/api/departments`);
 });
 
 // ===== GRACEFUL SHUTDOWN =====
+process.on('SIGTERM', () => {
+  console.log('🛑 SIGTERM received. Shutting down gracefully...');
+  server.close(() => {
+    mongoose.connection.close(false, () => {
+      console.log('🔌 MongoDB connection closed.');
+      process.exit(0);
+    });
+  });
+});
+
 process.on('SIGINT', () => {
-  console.log('👋 Shutting down server...');
-  server.close(() => process.exit(0));
+  console.log('👋 SIGINT received. Shutting down...');
+  server.close(() => {
+    mongoose.connection.close(false, () => {
+      process.exit(0);
+    });
+  });
 });

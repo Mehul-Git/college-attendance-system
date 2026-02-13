@@ -14,7 +14,8 @@ import {
   FaChevronRight,
   FaFilter,
   FaSync,
-  FaRegCalendarAlt
+  FaRegCalendarAlt,
+  FaLock
 } from 'react-icons/fa';
 
 function TeacherSchedules() {
@@ -22,10 +23,18 @@ function TeacherSchedules() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState('all'); // 'all', 'today', 'upcoming'
+  const [currentTime, setCurrentTime] = useState(new Date());
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchSchedules();
+    
+    // Update current time every minute
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000);
+    
+    return () => clearInterval(timer);
   }, []);
 
   const fetchSchedules = async () => {
@@ -43,6 +52,43 @@ function TeacherSchedules() {
 
   const today = new Date().toLocaleString('en-US', { weekday: 'short' });
   
+  // Check if session time is over
+  const isSessionTimeOver = (schedule) => {
+    if (!schedule.days.includes(today)) return false;
+    
+    try {
+      const now = currentTime;
+      const [hours, minutes] = schedule.endTime.split(':');
+      const endTime = new Date();
+      endTime.setHours(parseInt(hours), parseInt(minutes), 0);
+      
+      return now > endTime;
+    } catch {
+      return false;
+    }
+  };
+
+  // Check if session is currently active
+  const isSessionActive = (schedule) => {
+    if (!schedule.days.includes(today)) return false;
+    
+    try {
+      const now = currentTime;
+      const [startHours, startMinutes] = schedule.startTime.split(':');
+      const [endHours, endMinutes] = schedule.endTime.split(':');
+      
+      const startTime = new Date();
+      startTime.setHours(parseInt(startHours), parseInt(startMinutes), 0);
+      
+      const endTime = new Date();
+      endTime.setHours(parseInt(endHours), parseInt(endMinutes), 0);
+      
+      return now >= startTime && now <= endTime;
+    } catch {
+      return false;
+    }
+  };
+
   // Filter schedules
   const getFilteredSchedules = () => {
     if (filter === 'all') return schedules;
@@ -59,7 +105,7 @@ function TeacherSchedules() {
         // Check if any schedule day is today or in the future this week
         return scheduleDays.some(day => {
           const dayIndex = weekDays.indexOf(day);
-          return dayIndex >= todayIndex;
+          return dayIndex >= todayIndex && !isSessionTimeOver(schedule);
         });
       }
       return true;
@@ -129,6 +175,9 @@ function TeacherSchedules() {
           </div>
           
           <div className="flex items-center gap-3">
+            <div className="text-sm text-gray-600">
+              Current Time: {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </div>
             <button
               onClick={fetchSchedules}
               disabled={refreshing}
@@ -189,9 +238,9 @@ function TeacherSchedules() {
               </div>
             </div>
             <div className="text-3xl font-bold text-gray-900 mb-1">
-              {schedules.filter(s => getDayStatus(s.days) === 'past').length}
+              {schedules.filter(s => s.days.includes(today) && isSessionActive(s)).length}
             </div>
-            <p className="text-sm text-gray-600">Past Classes</p>
+            <p className="text-sm text-gray-600">Active Now</p>
           </div>
         </div>
 
@@ -270,6 +319,8 @@ function TeacherSchedules() {
             {filteredSchedules.map((schedule) => {
               const dayStatus = getDayStatus(schedule.days);
               const isToday = dayStatus === 'today';
+              const timeOver = isSessionTimeOver(schedule);
+              const activeNow = isSessionActive(schedule);
               
               return (
                 <div
@@ -277,7 +328,7 @@ function TeacherSchedules() {
                   className="group relative overflow-hidden"
                 >
                   <div className={`absolute inset-0 rounded-2xl blur opacity-0 group-hover:opacity-20 transition-opacity ${
-                    isToday 
+                    isToday && !timeOver
                       ? 'bg-gradient-to-r from-green-500 to-emerald-500' 
                       : dayStatus === 'upcoming'
                       ? 'bg-gradient-to-r from-blue-500 to-indigo-500'
@@ -289,15 +340,25 @@ function TeacherSchedules() {
                     <div className="p-6 border-b border-gray-200/60 relative">
                       {/* Status Badge */}
                       <div className="absolute top-4 right-4">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
-                          isToday
-                            ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-800'
-                            : dayStatus === 'upcoming'
-                            ? 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800'
-                            : 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700'
-                        }`}>
-                          {isToday ? 'TODAY' : dayStatus === 'upcoming' ? 'UPCOMING' : 'PAST'}
-                        </span>
+                        {isToday && !timeOver ? (
+                          activeNow ? (
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg animate-pulse">
+                              LIVE NOW
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-yellow-100 to-amber-100 text-amber-800">
+                              {timeOver ? 'TIME OVER' : 'TODAY'}
+                            </span>
+                          )
+                        ) : dayStatus === 'upcoming' ? (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800">
+                            UPCOMING
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700">
+                            PAST
+                          </span>
+                        )}
                       </div>
                       
                       {/* Content with left alignment */}
@@ -348,20 +409,51 @@ function TeacherSchedules() {
                     {/* Footer */}
                     <div className="p-6 bg-gradient-to-r from-gray-50 to-gray-100/30">
                       {isToday ? (
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                            <span className="text-sm font-medium text-green-700">Class is scheduled today</span>
+                        timeOver ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                              <span className="text-sm font-medium text-gray-600">Session time has ended</span>
+                            </div>
+                            <button
+                              disabled
+                              className="px-5 py-2.5 bg-gray-300 text-gray-600 font-medium rounded-xl cursor-not-allowed flex items-center gap-2"
+                            >
+                              <FaLock className="w-4 h-4" />
+                              <span>Session Ended</span>
+                            </button>
                           </div>
-                          <button
-                            onClick={() => navigate(`/teacher/attendance/${schedule._id}`)}
-                            className="group relative overflow-hidden inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-xl hover:from-green-700 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 transition-all duration-200 shadow-lg hover:shadow-xl"
-                          >
-                            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
-                            <FaPlayCircle className="w-4 h-4 relative z-10" />
-                            <span className="relative z-10">Start Attendance</span>
-                          </button>
-                        </div>
+                        ) : activeNow ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                              <span className="text-sm font-medium text-green-700">Session is active now!</span>
+                            </div>
+                            <button
+                              onClick={() => navigate(`/teacher/attendance/${schedule._id}`)}
+                              className="group relative overflow-hidden inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-xl hover:from-green-700 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 transition-all duration-200 shadow-lg hover:shadow-xl"
+                            >
+                              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                              <FaPlayCircle className="w-4 h-4 relative z-10" />
+                              <span className="relative z-10">Start Attendance</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                              <span className="text-sm font-medium text-yellow-700">Class is scheduled today</span>
+                            </div>
+                            <button
+                              onClick={() => navigate(`/teacher/attendance/${schedule._id}`)}
+                              className="group relative overflow-hidden inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-all duration-200 shadow-lg hover:shadow-xl"
+                            >
+                              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                              <FaPlayCircle className="w-4 h-4 relative z-10" />
+                              <span className="relative z-10">Start Attendance</span>
+                            </button>
+                          </div>
+                        )
                       ) : dayStatus === 'upcoming' ? (
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -372,7 +464,7 @@ function TeacherSchedules() {
                             disabled
                             className="px-5 py-2.5 bg-gray-200 text-gray-500 font-medium rounded-xl cursor-not-allowed"
                           >
-                            View Details
+                            Not Available Yet
                           </button>
                         </div>
                       ) : (
@@ -403,22 +495,35 @@ function TeacherSchedules() {
       <div className="mt-8 p-6 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl shadow-xl text-white">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h3 className="text-lg font-semibold mb-2">Today is {today}</h3>
+            <h3 className="text-lg font-semibold mb-2">Today is {today}, {currentTime.toLocaleDateString()}</h3>
             <p className="text-blue-100">
-              {schedules.filter(s => s.days.includes(today)).length} classes scheduled for today
+              Current Time: {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p>
           </div>
           <div className="flex items-center gap-2">
             {schedules.filter(s => s.days.includes(today)).length > 0 ? (
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm">
-                  <FaCalendarDay className="w-6 h-6" />
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold">
-                    {schedules.filter(s => s.days.includes(today)).length}
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm">
+                    <FaCalendarDay className="w-6 h-6" />
                   </div>
-                  <div className="text-sm text-blue-100">Classes Today</div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold">
+                      {schedules.filter(s => s.days.includes(today)).length}
+                    </div>
+                    <div className="text-sm text-blue-100">Classes Today</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-green-500/20 rounded-xl backdrop-blur-sm">
+                    <FaPlayCircle className="w-6 h-6" />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold">
+                      {schedules.filter(s => s.days.includes(today) && !isSessionTimeOver(s)).length}
+                    </div>
+                    <div className="text-sm text-blue-100">Available Now</div>
+                  </div>
                 </div>
               </div>
             ) : (

@@ -1,12 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaSchool, FaChalkboardTeacher, FaUserGraduate, FaUserShield } from 'react-icons/fa';
-import API from '../services/api';
+import { 
+  FaSchool, 
+  FaChalkboardTeacher, 
+  FaUserGraduate, 
+  FaUserShield,
+  FaLock 
+} from 'react-icons/fa';
+import API from '../services/api'
+import ForgotPasswordModal from '../pages/admin/ForgotPasswordModal';
 
 function HomePage() {
   const navigate = useNavigate();
   const [isFirstTime, setIsFirstTime] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   useEffect(() => {
     checkFirstTimeSetup();
@@ -63,6 +71,12 @@ function HomePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal 
+        isOpen={showForgotPassword} 
+        onClose={() => setShowForgotPassword(false)} 
+      />
+
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-700 text-white py-12">
         <div className="container mx-auto px-4 text-center">
@@ -144,6 +158,22 @@ function HomePage() {
             </div>
           ))}
         </div>
+
+        {/* 🔐 Forgot Password Link - Only show if not first time */}
+        {!isFirstTime && (
+          <div className="mt-8 text-center">
+            <button
+              onClick={() => setShowForgotPassword(true)}
+              className="inline-flex items-center px-6 py-3 bg-white border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 hover:border-blue-500 hover:text-blue-600 transition-all duration-300 group"
+            >
+              <FaLock className="mr-2 text-gray-400 group-hover:text-blue-500" />
+              <span>Forgot Password? (Admin Only)</span>
+            </button>
+            <p className="text-xs text-gray-500 mt-2">
+              For administrators only. Teachers and students should contact their admin.
+            </p>
+          </div>
+        )}
 
         {/* Footer Note */}
         <div className="mt-12 text-center text-gray-600 space-y-2">

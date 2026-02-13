@@ -7,7 +7,8 @@ import AdminStudents from './AdminStudents';
 import AdminDepartments from './AdminDepartments';
 import AdminSubjects from './AdminSubjects';
 import AdminClassSchedules from './AdminClassSchedules';
-import AdminAttendanceReports from './AdminAttendanceReports'; // Import the missing component
+import AdminAttendanceReports from './AdminAttendanceReports';
+import AdminProfile from './AdminProfile'; // Import the profile component
 
 function AdminDashboard() {
   const token = localStorage.getItem('token');
@@ -37,6 +38,7 @@ function AdminDashboard() {
         <Route path="subjects" element={<AdminSubjects />} />
         <Route path="class-schedules" element={<AdminClassSchedules />} />
         <Route path="reports" element={<AdminAttendanceReports />} />
+        <Route path="profile" element={<AdminProfile />} /> {/* Add this route */}
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="dashboard" replace />} />

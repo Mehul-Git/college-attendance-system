@@ -189,20 +189,61 @@ exports.getMyAttendance = catchAsync(async (req, res) => {
     student: studentId 
   })
     .populate('subject', 'name code')
-    .populate('session')
+    .populate({
+      path: 'session',
+      populate: {
+        path: 'classSchedule',
+        populate: {
+          path: 'teacher',
+          select: 'name email'
+        }
+      }
+    })
     .sort({ createdAt: -1 });
 
-  const formattedRecords = records.map(record => ({
-    _id: record._id,
-    subject: record.subject?.name || 'Unknown',
-    subjectCode: record.subject?.code || '',
-    status: record.status,
-    date: record.createdAt,
-  }));
+  const formattedRecords = records.map(record => {
+    // Extract teacher name from classSchedule via session
+    let teacherName = 'Not assigned';
+    
+    if (record.session?.classSchedule?.teacher) {
+      if (typeof record.session.classSchedule.teacher === 'object') {
+        teacherName = record.session.classSchedule.teacher.name || 'Unknown Teacher';
+      } else {
+        teacherName = record.session.classSchedule.teacher;
+      }
+    }
+    
+    // Extract subject name - check multiple locations
+    let subjectName = 'Unknown';
+    let subjectCode = '';
+    
+    if (record.subject) {
+      subjectName = typeof record.subject === 'object' 
+        ? record.subject.name || 'Unknown' 
+        : record.subject;
+      subjectCode = record.subject.code || '';
+    } else if (record.session?.classSchedule?.subject) {
+      // If subject is on classSchedule
+      subjectName = typeof record.session.classSchedule.subject === 'object'
+        ? record.session.classSchedule.subject.name || 'Unknown'
+        : record.session.classSchedule.subject;
+    }
+
+    return {
+      _id: record._id,
+      subject: subjectName,
+      subjectCode: subjectCode,
+      teacher: teacherName,
+      status: record.status,
+      date: record.createdAt || record.markedAt || new Date(),
+      sessionId: record.session?._id || null,
+    };
+  });
 
   res.json({
     success: true,
     records: formattedRecords,
+    total: formattedRecords.length
   });
 });
 

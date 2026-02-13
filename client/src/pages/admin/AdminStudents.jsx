@@ -3,8 +3,8 @@ import API from '../../services/api';
 import { 
   FaUserGraduate, 
   FaTrash, 
-  FaEdit, 
-  FaPlus, 
+  FaKey, 
+  FaMobileAlt,
   FaSpinner,
   FaCheckCircle,
   FaExclamationCircle 
@@ -25,6 +25,14 @@ function AdminStudents() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [editingId, setEditingId] = useState(null);
+  const [resetModal, setResetModal] = useState({
+    show: false,
+    studentId: null,
+    studentName: '',
+    type: 'password', // 'password' or 'device'
+    newPassword: '',
+    resetDeviceId: false
+  });
 
   const token = localStorage.getItem('token');
 
@@ -69,7 +77,6 @@ function AdminStudents() {
     setError('');
     setSuccess('');
 
-    // Validate form
     if (!form.name || !form.email || !form.password || !form.department || !form.semester) {
       setError('All fields are required');
       return;
@@ -82,20 +89,17 @@ function AdminStudents() {
 
     try {
       if (editingId) {
-        // Update existing student
         await API.patch(`/students/${editingId}`, form, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setSuccess('Student updated successfully');
       } else {
-        // Create new student
         await API.post('/students', form, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setSuccess('Student created successfully');
       }
 
-      // Reset form
       setForm({
         name: '',
         email: '',
@@ -105,8 +109,6 @@ function AdminStudents() {
         section: 'A'
       });
       setEditingId(null);
-      
-      // Refresh list
       fetchStudents();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save student');
@@ -127,17 +129,72 @@ function AdminStudents() {
     }
   };
 
-  const handleEdit = (student) => {
-    setForm({
-      name: student.name,
-      email: student.email,
-      password: '', // Don't show password
-      department: student.department?._id || '',
-      semester: student.semester || '',
-      section: student.section || 'A'
+  const openResetModal = (student, type) => {
+    setResetModal({
+      show: true,
+      studentId: student._id,
+      studentName: student.name,
+      type: type,
+      newPassword: '',
+      resetDeviceId: false
     });
-    setEditingId(student._id);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const closeResetModal = () => {
+    setResetModal({
+      show: false,
+      studentId: null,
+      studentName: '',
+      type: 'password',
+      newPassword: '',
+      resetDeviceId: false
+    });
+  };
+
+  const handleResetModalChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setResetModal({
+      ...resetModal,
+      [name]: type === 'checkbox' ? checked : value
+    });
+  };
+
+  const handleResetAction = async () => {
+    try {
+      if (resetModal.type === 'password') {
+        if (!resetModal.newPassword || resetModal.newPassword.length < 6) {
+          setError('Password must be at least 6 characters');
+          return;
+        }
+
+        await API.post('/auth/admin/reset-password', {
+          userId: resetModal.studentId,
+          newPassword: resetModal.newPassword
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        setSuccess(`Password reset successfully for ${resetModal.studentName}`);
+      } else if (resetModal.type === 'device') {
+        if (resetModal.resetDeviceId) {
+          await API.post('/auth/admin/reset-device-id', {
+            studentId: resetModal.studentId
+          }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+
+          setSuccess(`Device ID reset successfully for ${resetModal.studentName}`);
+        } else {
+          setError('Please check the confirmation box to reset device ID');
+          return;
+        }
+      }
+
+      closeResetModal();
+      fetchStudents();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to perform reset');
+    }
   };
 
   if (loading) {
@@ -155,30 +212,31 @@ function AdminStudents() {
         <p className="text-gray-600 mt-1">Create and manage student accounts</p>
       </div>
 
+      {/* Notifications */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center">
+            <FaExclamationCircle className="text-red-500 mr-2" />
+            <span className="text-red-700">{error}</span>
+          </div>
+        </div>
+      )}
+
+      {success && (
+        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <div className="flex items-center">
+            <FaCheckCircle className="text-green-500 mr-2" />
+            <span className="text-green-700">{success}</span>
+          </div>
+        </div>
+      )}
+
       {/* Create/Edit Student Form */}
       <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
         <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
           <FaUserGraduate className="mr-2 text-blue-600" />
           {editingId ? 'Edit Student' : 'Add New Student'}
         </h2>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center">
-              <FaExclamationCircle className="text-red-500 mr-2" />
-              <span className="text-red-700">{error}</span>
-            </div>
-          </div>
-        )}
-
-        {success && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex items-center">
-              <FaCheckCircle className="text-green-500 mr-2" />
-              <span className="text-green-700">{success}</span>
-            </div>
-          </div>
-        )}
 
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -188,7 +246,7 @@ function AdminStudents() {
                 name="name"
                 type="text"
                 placeholder="John Doe"
-                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={form.name}
                 onChange={handleChange}
                 required
@@ -201,7 +259,7 @@ function AdminStudents() {
                 name="email"
                 type="email"
                 placeholder="student@college.edu"
-                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={form.email}
                 onChange={handleChange}
                 required
@@ -216,7 +274,7 @@ function AdminStudents() {
                 name="password"
                 type="password"
                 placeholder="••••••••"
-                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={form.password}
                 onChange={handleChange}
                 required={!editingId}
@@ -228,7 +286,7 @@ function AdminStudents() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Department *</label>
               <select
                 name="department"
-                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={form.department}
                 onChange={handleChange}
                 required
@@ -246,7 +304,7 @@ function AdminStudents() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Semester *</label>
               <select
                 name="semester"
-                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={form.semester}
                 onChange={handleChange}
                 required
@@ -264,7 +322,7 @@ function AdminStudents() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
               <select
                 name="section"
-                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={form.section}
                 onChange={handleChange}
               >
@@ -298,7 +356,7 @@ function AdminStudents() {
             )}
             <button
               type="submit"
-              className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {editingId ? 'Update Student' : 'Create Student'}
             </button>
@@ -335,7 +393,7 @@ function AdminStudents() {
                     Semester
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
+                    Device Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -373,27 +431,43 @@ function AdminStudents() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                        student.isActive 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {student.isActive ? 'Active' : 'Inactive'}
-                      </span>
+                      <div className="flex items-center">
+                        <FaMobileAlt className={`mr-2 ${student.deviceId ? 'text-green-500' : 'text-gray-400'}`} />
+                        <span className={`text-sm ${student.deviceId ? 'text-green-600' : 'text-gray-500'}`}>
+                          {student.deviceId ? 'Device Registered' : 'No Device'}
+                        </span>
+                        {student.deviceId && (
+                          <span className="ml-2 text-xs text-gray-400 truncate max-w-[100px]" title={student.deviceId}>
+                            {student.deviceId.substring(0, 15)}...
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
                         <button
-                          onClick={() => handleEdit(student)}
-                          className="text-blue-600 hover:text-blue-900"
+                          onClick={() => openResetModal(student, 'password')}
+                          className="flex items-center text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-lg transition-colors"
+                          title="Reset Password"
                         >
-                          <FaEdit className="w-4 h-4" />
+                          <FaKey className="mr-1" />
+                          <span className="hidden md:inline">Password</span>
+                        </button>
+                        <button
+                          onClick={() => openResetModal(student, 'device')}
+                          className="flex items-center text-purple-600 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 px-3 py-2 rounded-lg transition-colors"
+                          title="Reset Device ID"
+                        >
+                          <FaMobileAlt className="mr-1" />
+                          <span className="hidden md:inline">Device</span>
                         </button>
                         <button
                           onClick={() => handleDelete(student._id)}
-                          className="text-red-600 hover:text-red-900"
+                          className="flex items-center text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg transition-colors"
+                          title="Delete Student"
                         >
-                          <FaTrash className="w-4 h-4" />
+                          <FaTrash className="mr-1" />
+                          <span className="hidden md:inline">Delete</span>
                         </button>
                       </div>
                     </td>
@@ -404,6 +478,79 @@ function AdminStudents() {
           </div>
         )}
       </div>
+
+      {/* Reset Modal */}
+      {resetModal.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                {resetModal.type === 'password' ? 'Reset Password' : 'Reset Device ID'}
+              </h3>
+              <p className="text-gray-600 mb-4">
+                {resetModal.type === 'password' 
+                  ? `Set a new password for ${resetModal.studentName}`
+                  : `Reset device ID for ${resetModal.studentName}. This will allow them to login from a new device.`
+                }
+              </p>
+              
+              {resetModal.type === 'password' ? (
+                <input
+                  type="password"
+                  name="newPassword"
+                  placeholder="New password (min. 6 characters)"
+                  className="w-full border border-gray-300 p-3 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={resetModal.newPassword}
+                  onChange={handleResetModalChange}
+                  minLength="6"
+                />
+              ) : (
+                <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="flex items-start">
+                    <FaExclamationCircle className="text-yellow-500 mr-2 mt-0.5" />
+                    <div>
+                      <p className="text-yellow-800 font-medium mb-1">Warning</p>
+                      <p className="text-yellow-700 text-sm">
+                        Resetting device ID will allow this student to login from any device.
+                        Only do this if they have lost access to their registered device.
+                      </p>
+                      <label className="flex items-center mt-3">
+                        <input
+                          type="checkbox"
+                          name="resetDeviceId"
+                          checked={resetModal.resetDeviceId}
+                          onChange={handleResetModalChange}
+                          className="mr-2 rounded text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-yellow-800">I confirm I want to reset the device ID</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={closeResetModal}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleResetAction}
+                  className={`px-4 py-2 text-white rounded-lg focus:outline-none focus:ring-2 ${
+                    resetModal.type === 'password' 
+                      ? 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
+                      : 'bg-purple-600 hover:bg-purple-700 focus:ring-purple-500'
+                  }`}
+                >
+                  {resetModal.type === 'password' ? 'Reset Password' : 'Reset Device ID'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

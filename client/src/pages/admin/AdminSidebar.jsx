@@ -11,7 +11,7 @@ import {
   FaChartBar,
   FaChevronRight,
   FaUniversity,
-  FaUserCircle
+  FaUserCircle,
 } from "react-icons/fa";
 
 function AdminSidebar() {
@@ -45,17 +45,21 @@ function AdminSidebar() {
               <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-700 bg-clip-text text-transparent">
                 Admin Panel
               </h1>
-              <p className="text-xs text-gray-500 font-medium">College Management System</p>
+              <p className="text-xs text-gray-500 font-medium">
+                College Management System
+              </p>
             </div>
           </div>
-          
+
           {user && (
             <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
               <div className="p-2 bg-white rounded-lg shadow-sm">
                 <FaUserCircle className="text-xl text-blue-600" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-gray-800">{user.name}</p>
+                <p className="text-sm font-semibold text-gray-800">
+                  {user.name}
+                </p>
                 <p className="text-xs text-gray-500">Administrator</p>
               </div>
             </div>
@@ -65,137 +69,191 @@ function AdminSidebar() {
         {/* Navigation with improved styling */}
         <nav className="space-y-2 flex-1">
           <div className="px-3 mb-2">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Main Menu</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              Main Menu
+            </p>
           </div>
-          
+
           <NavLink to="/admin/dashboard" className={linkClass} end>
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg transition-all duration-300 ${
-                window.location.pathname.includes('/dashboard') 
-                  ? 'bg-white/20' 
-                  : 'bg-blue-100 group-hover:bg-blue-200'
-              }`}>
+              <div
+                className={`p-2 rounded-lg transition-all duration-300 ${
+                  window.location.pathname.includes("/dashboard")
+                    ? "bg-white/20"
+                    : "bg-blue-100 group-hover:bg-blue-200"
+                }`}
+              >
                 <FaTachometerAlt className="text-lg" />
               </div>
               <span className="font-medium">Dashboard</span>
             </div>
-            <FaChevronRight className={`text-sm transition-all duration-300 ${
-              window.location.pathname.includes('/dashboard') 
-                ? 'opacity-100' 
-                : 'opacity-0 group-hover:opacity-50'
-            }`} />
+            <FaChevronRight
+              className={`text-sm transition-all duration-300 ${
+                window.location.pathname.includes("/dashboard")
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-50"
+              }`}
+            />
           </NavLink>
 
           <NavLink to="/admin/departments" className={linkClass}>
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg transition-all duration-300 ${
-                window.location.pathname.includes('/departments') 
-                  ? 'bg-white/20' 
-                  : 'bg-green-100 group-hover:bg-green-200'
-              }`}>
+              <div
+                className={`p-2 rounded-lg transition-all duration-300 ${
+                  window.location.pathname.includes("/departments")
+                    ? "bg-white/20"
+                    : "bg-green-100 group-hover:bg-green-200"
+                }`}
+              >
                 <FaUsers className="text-lg" />
               </div>
               <span className="font-medium">Departments</span>
             </div>
-            <FaChevronRight className={`text-sm transition-all duration-300 ${
-              window.location.pathname.includes('/departments') 
-                ? 'opacity-100' 
-                : 'opacity-0 group-hover:opacity-50'
-            }`} />
+            <FaChevronRight
+              className={`text-sm transition-all duration-300 ${
+                window.location.pathname.includes("/departments")
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-50"
+              }`}
+            />
           </NavLink>
 
           <NavLink to="/admin/teachers" className={linkClass}>
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg transition-all duration-300 ${
-                window.location.pathname.includes('/teachers') 
-                  ? 'bg-white/20' 
-                  : 'bg-purple-100 group-hover:bg-purple-200'
-              }`}>
+              <div
+                className={`p-2 rounded-lg transition-all duration-300 ${
+                  window.location.pathname.includes("/teachers")
+                    ? "bg-white/20"
+                    : "bg-purple-100 group-hover:bg-purple-200"
+                }`}
+              >
                 <FaUserTie className="text-lg" />
               </div>
               <span className="font-medium">Teachers</span>
             </div>
-            <FaChevronRight className={`text-sm transition-all duration-300 ${
-              window.location.pathname.includes('/teachers') 
-                ? 'opacity-100' 
-                : 'opacity-0 group-hover:opacity-50'
-            }`} />
+            <FaChevronRight
+              className={`text-sm transition-all duration-300 ${
+                window.location.pathname.includes("/teachers")
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-50"
+              }`}
+            />
           </NavLink>
 
           <NavLink to="/admin/students" className={linkClass}>
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg transition-all duration-300 ${
-                window.location.pathname.includes('/students') 
-                  ? 'bg-white/20' 
-                  : 'bg-amber-100 group-hover:bg-amber-200'
-              }`}>
+              <div
+                className={`p-2 rounded-lg transition-all duration-300 ${
+                  window.location.pathname.includes("/students")
+                    ? "bg-white/20"
+                    : "bg-amber-100 group-hover:bg-amber-200"
+                }`}
+              >
                 <FaUserGraduate className="text-lg" />
               </div>
               <span className="font-medium">Students</span>
             </div>
-            <FaChevronRight className={`text-sm transition-all duration-300 ${
-              window.location.pathname.includes('/students') 
-                ? 'opacity-100' 
-                : 'opacity-0 group-hover:opacity-50'
-            }`} />
+            <FaChevronRight
+              className={`text-sm transition-all duration-300 ${
+                window.location.pathname.includes("/students")
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-50"
+              }`}
+            />
           </NavLink>
 
           <NavLink to="/admin/subjects" className={linkClass}>
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg transition-all duration-300 ${
-                window.location.pathname.includes('/subjects') 
-                  ? 'bg-white/20' 
-                  : 'bg-emerald-100 group-hover:bg-emerald-200'
-              }`}>
+              <div
+                className={`p-2 rounded-lg transition-all duration-300 ${
+                  window.location.pathname.includes("/subjects")
+                    ? "bg-white/20"
+                    : "bg-emerald-100 group-hover:bg-emerald-200"
+                }`}
+              >
                 <FaBook className="text-lg" />
               </div>
               <span className="font-medium">Subjects</span>
             </div>
-            <FaChevronRight className={`text-sm transition-all duration-300 ${
-              window.location.pathname.includes('/subjects') 
-                ? 'opacity-100' 
-                : 'opacity-0 group-hover:opacity-50'
-            }`} />
+            <FaChevronRight
+              className={`text-sm transition-all duration-300 ${
+                window.location.pathname.includes("/subjects")
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-50"
+              }`}
+            />
           </NavLink>
 
           <NavLink to="/admin/class-schedules" className={linkClass}>
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg transition-all duration-300 ${
-                window.location.pathname.includes('/class-schedules') 
-                  ? 'bg-white/20' 
-                  : 'bg-rose-100 group-hover:bg-rose-200'
-              }`}>
+              <div
+                className={`p-2 rounded-lg transition-all duration-300 ${
+                  window.location.pathname.includes("/class-schedules")
+                    ? "bg-white/20"
+                    : "bg-rose-100 group-hover:bg-rose-200"
+                }`}
+              >
                 <FaCalendarAlt className="text-lg" />
               </div>
               <span className="font-medium">Schedules</span>
             </div>
-            <FaChevronRight className={`text-sm transition-all duration-300 ${
-              window.location.pathname.includes('/class-schedules') 
-                ? 'opacity-100' 
-                : 'opacity-0 group-hover:opacity-50'
-            }`} />
+            <FaChevronRight
+              className={`text-sm transition-all duration-300 ${
+                window.location.pathname.includes("/class-schedules")
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-50"
+              }`}
+            />
           </NavLink>
 
           <div className="px-3 mt-6 mb-2">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Analytics</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              Analytics
+            </p>
           </div>
 
           <NavLink to="/admin/reports" className={linkClass}>
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg transition-all duration-300 ${
-                window.location.pathname.includes('/reports') 
-                  ? 'bg-white/20' 
-                  : 'bg-cyan-100 group-hover:bg-cyan-200'
-              }`}>
+              <div
+                className={`p-2 rounded-lg transition-all duration-300 ${
+                  window.location.pathname.includes("/reports")
+                    ? "bg-white/20"
+                    : "bg-cyan-100 group-hover:bg-cyan-200"
+                }`}
+              >
                 <FaChartBar className="text-lg" />
               </div>
               <span className="font-medium">Reports</span>
             </div>
-            <FaChevronRight className={`text-sm transition-all duration-300 ${
-              window.location.pathname.includes('/reports') 
-                ? 'opacity-100' 
-                : 'opacity-0 group-hover:opacity-50'
-            }`} />
+            <FaChevronRight
+              className={`text-sm transition-all duration-300 ${
+                window.location.pathname.includes("/reports")
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-50"
+              }`}
+            />
+          </NavLink>
+          {/* Add this after the Reports NavLink */}
+          <NavLink to="/admin/profile" className={linkClass}>
+            <div className="flex items-center gap-3">
+              <div
+                className={`p-2 rounded-lg transition-all duration-300 ${
+                  window.location.pathname.includes("/profile")
+                    ? "bg-white/20"
+                    : "bg-indigo-100 group-hover:bg-indigo-200"
+                }`}
+              >
+                <FaUserCircle className="text-lg" />
+              </div>
+              <span className="font-medium">Profile & Security</span>
+            </div>
+            <FaChevronRight
+              className={`text-sm transition-all duration-300 ${
+                window.location.pathname.includes("/profile")
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-50"
+              }`}
+            />
           </NavLink>
         </nav>
 
@@ -212,7 +270,7 @@ function AdminSidebar() {
             <div className="flex-1"></div>
             <FaChevronRight className="text-xs opacity-0 group-hover:opacity-100 transition-all duration-300" />
           </button>
-          
+
           <div className="mt-4 px-2">
             <div className="flex items-center justify-between text-xs text-gray-400">
               <span className="font-medium">v1.0.0</span>

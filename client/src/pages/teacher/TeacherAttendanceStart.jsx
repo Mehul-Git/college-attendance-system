@@ -18,7 +18,8 @@ import {
   FaUserGraduate,
   FaIdCard,
   FaCalendarAlt,
-  FaSignal
+  FaSignal,
+  FaCheckDouble
 } from "react-icons/fa";
 
 function TeacherAttendanceStart() {
@@ -32,6 +33,8 @@ function TeacherAttendanceStart() {
   const [error, setError] = useState("");
   const [sessionInfo, setSessionInfo] = useState(null);
   const [locationData, setLocationData] = useState(null);
+  const [studentCount, setStudentCount] = useState(0);
+  const [isSessionExpired, setIsSessionExpired] = useState(false);
 
   /* ============================
      📋 FETCH SCHEDULE INFO
@@ -42,6 +45,11 @@ function TeacherAttendanceStart() {
         const res = await API.get(`/class-schedule/${scheduleId}`);
         if (res.data.success) {
           setSessionInfo(res.data.schedule);
+          
+          // Get total students in this department/semester
+          if (res.data.schedule.department?._id) {
+            fetchStudentCount(res.data.schedule.department._id);
+          }
         }
       } catch (err) {
         console.error("Failed to fetch schedule info:", err);
@@ -50,6 +58,16 @@ function TeacherAttendanceStart() {
     
     if (scheduleId) fetchScheduleInfo();
   }, [scheduleId]);
+
+  // Fetch total student count
+  const fetchStudentCount = async (departmentId) => {
+    try {
+      const res = await API.get(`/students/count?department=${departmentId}`);
+      setStudentCount(res.data.count || 0);
+    } catch (err) {
+      console.error("Failed to fetch student count:", err);
+    }
+  };
 
   /* ============================
      ▶️ START ATTENDANCE
@@ -85,6 +103,7 @@ function TeacherAttendanceStart() {
           setSessionId(id);
           setStatus("live");
           setError("");
+          setIsSessionExpired(false);
           
           // Initial fetch
           fetchAttendees(id);
@@ -132,7 +151,13 @@ function TeacherAttendanceStart() {
     if (status !== "live") return;
 
     const timer = setInterval(() => {
-      setSecondsLeft((s) => s - 1);
+      setSecondsLeft((s) => {
+        if (s <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return s - 1;
+      });
     }, 1000);
 
     const poll = setInterval(() => fetchAttendees(), 5000);
@@ -144,10 +169,11 @@ function TeacherAttendanceStart() {
   }, [status, sessionId]);
 
   /* ============================
-     ⛔ AUTO END
+     ⛔ AUTO END WHEN TIME EXPIRES
   ============================ */
   useEffect(() => {
     if (secondsLeft <= 0 && status === "live") {
+      setIsSessionExpired(true);
       endSession();
     }
   }, [secondsLeft, status]);
@@ -158,7 +184,9 @@ function TeacherAttendanceStart() {
     } catch (err) {
       console.error("Error ending session:", err);
     }
-    navigate("/teacher/dashboard");
+    
+    // Don't navigate immediately - show summary
+    setStatus("ended");
   };
 
   const formatTime = (seconds) => {
@@ -173,8 +201,84 @@ function TeacherAttendanceStart() {
     }
   };
 
+  const handleBackToDashboard = () => {
+    navigate("/teacher/dashboard");
+  };
+
+  // Calculate attendance percentage
+  const attendancePercentage = studentCount > 0 
+    ? Math.round((attendees.length / studentCount) * 100) 
+    : 0;
+
   /* ============================
-     UI RENDERING
+     SESSION ENDED VIEW
+  ============================ */
+  if (status === "ended") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-green-50/30 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-2xl border border-green-200/60 p-8 text-center">
+            {/* Success Icon */}
+            <div className="mb-6">
+              <div className="w-24 h-24 bg-gradient-to-br from-green-100 to-emerald-100 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                <div className="absolute inset-0 rounded-full border-2 border-dashed border-green-300/50"></div>
+                <FaCheckDouble className="w-12 h-12 text-green-600" />
+              </div>
+            </div>
+            
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">
+              Attendance Session Ended
+            </h2>
+            
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50/30 p-4 rounded-xl border border-blue-200/50">
+                <p className="text-sm text-gray-600 mb-1">Total Students</p>
+                <p className="text-3xl font-bold text-blue-600">{studentCount || '--'}</p>
+              </div>
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50/30 p-4 rounded-xl border border-green-200/50">
+                <p className="text-sm text-gray-600 mb-1">Present</p>
+                <p className="text-3xl font-bold text-green-600">{attendees.length}</p>
+              </div>
+            </div>
+            
+            {/* Attendance Rate */}
+            <div className="mb-6 p-4 bg-gradient-to-br from-purple-50 to-pink-50/30 rounded-xl border border-purple-200/50">
+              <p className="text-sm text-gray-600 mb-2">Attendance Rate</p>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700">Present</span>
+                <span className="text-sm font-medium text-gray-900">{attendancePercentage}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div 
+                  className="bg-gradient-to-r from-green-500 to-emerald-500 h-2.5 rounded-full transition-all duration-500"
+                  style={{ width: `${attendancePercentage}%` }}
+                ></div>
+              </div>
+            </div>
+            
+            <div className="space-y-3">
+              <button
+                onClick={handleBackToDashboard}
+                className="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-lg"
+              >
+                Back to Dashboard
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full py-3.5 px-4 bg-white border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200"
+              >
+                Start New Session
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ============================
+     ERROR VIEW
   ============================ */
   if (error && status === "idle") {
     return (
@@ -196,7 +300,7 @@ function TeacherAttendanceStart() {
                 Try Again
               </button>
               <button
-                onClick={() => navigate("/teacher/dashboard")}
+                onClick={handleBackToDashboard}
                 className="flex items-center justify-center gap-2 px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
               >
                 <FaChevronLeft className="w-4 h-4" />
@@ -209,13 +313,16 @@ function TeacherAttendanceStart() {
     );
   }
 
+  /* ============================
+     IDLE / START VIEW
+  ============================ */
   if (status === "idle") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-green-50/30 p-4 md:p-6">
         <div className="max-w-4xl mx-auto">
           {/* Back Button */}
           <button
-            onClick={() => navigate("/teacher/dashboard")}
+            onClick={handleBackToDashboard}
             className="group flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-8 transition-colors"
           >
             <div className="p-2 bg-white rounded-xl shadow-sm group-hover:shadow transition-shadow">
@@ -274,6 +381,17 @@ function TeacherAttendanceStart() {
                       </div>
                     </div>
                   </div>
+                  {studentCount > 0 && (
+                    <div className="mt-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50/30 rounded-xl border border-purple-200/50">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <FaUsers className="w-4 h-4 text-purple-600" />
+                          <span className="text-sm font-medium text-gray-700">Total Students in this Department:</span>
+                        </div>
+                        <span className="text-xl font-bold text-purple-700">{studentCount}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -296,7 +414,7 @@ function TeacherAttendanceStart() {
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
-                    <span className="text-gray-700">High accuracy GPS is required for this session</span>
+                    <span className="text-gray-700">⚠️ Each student can mark attendance ONLY ONCE per session</span>
                   </div>
                 </div>
               </div>
@@ -322,6 +440,9 @@ function TeacherAttendanceStart() {
     );
   }
 
+  /* ============================
+     STARTING VIEW
+  ============================ */
   if (status === "starting") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 flex items-center justify-center p-4">
@@ -343,6 +464,9 @@ function TeacherAttendanceStart() {
     );
   }
 
+  /* ============================
+     LIVE SESSION VIEW
+  ============================ */
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
@@ -362,14 +486,16 @@ function TeacherAttendanceStart() {
             {/* Timer */}
             <div className={`relative group ${secondsLeft <= 60 ? 'animate-pulse' : ''}`}>
               <div className="absolute inset-0 bg-gradient-to-r from-red-500 to-pink-500 rounded-xl blur opacity-0 group-hover:opacity-20 transition-opacity"></div>
-              <div className={`relative px-6 py-3 rounded-xl ${secondsLeft <= 60 
-                ? 'bg-gradient-to-r from-red-100 to-pink-100 border border-red-200 text-red-700' 
-                : 'bg-gradient-to-r from-blue-100 to-indigo-100 border border-blue-200 text-blue-700'
+              <div className={`relative px-6 py-3 rounded-xl ${
+                secondsLeft <= 60 
+                  ? 'bg-gradient-to-r from-red-100 to-pink-100 border border-red-200 text-red-700' 
+                  : 'bg-gradient-to-r from-blue-100 to-indigo-100 border border-blue-200 text-blue-700'
               }`}>
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${secondsLeft <= 60 
-                    ? 'bg-gradient-to-r from-red-500 to-pink-500' 
-                    : 'bg-gradient-to-r from-blue-500 to-indigo-500'
+                  <div className={`p-2 rounded-lg ${
+                    secondsLeft <= 60 
+                      ? 'bg-gradient-to-r from-red-500 to-pink-500' 
+                      : 'bg-gradient-to-r from-blue-500 to-indigo-500'
                   }`}>
                     <FaClock className="w-4 h-4 text-white" />
                   </div>
@@ -381,13 +507,16 @@ function TeacherAttendanceStart() {
               </div>
             </div>
             
+            {/* End Session Button - KEPT AS REQUESTED */}
             <button
               onClick={handleManualEnd}
+              disabled={isSessionExpired}
               className="group relative overflow-hidden"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-red-500 to-pink-500 rounded-xl blur opacity-0 group-hover:opacity-20 transition-opacity"></div>
-              <div className="relative flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-red-600 to-pink-600 text-white font-medium rounded-xl hover:from-red-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-all duration-200 shadow-lg"
-              >
+              <div className={`relative flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-red-600 to-pink-600 text-white font-medium rounded-xl hover:from-red-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-all duration-200 shadow-lg ${
+                isSessionExpired ? 'opacity-50 cursor-not-allowed' : ''
+              }`}>
                 <FaStopCircle className="w-4 h-4" />
                 <span>End Session</span>
               </div>
@@ -443,6 +572,20 @@ function TeacherAttendanceStart() {
           </div>
         </div>
 
+        {/* One Attendance Per Session Warning */}
+        <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-yellow-50/30 backdrop-blur-sm rounded-xl border border-amber-200/50">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-amber-500 to-yellow-500 rounded-lg">
+              <FaExclamationTriangle className="w-4 h-4 text-white" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-800">
+                ⚠️ One Attendance Per Session - Each student can only mark attendance once during this session
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Location Info */}
         {locationData && (
           <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50/30 backdrop-blur-sm rounded-xl border border-blue-200/50">
@@ -466,13 +609,18 @@ function TeacherAttendanceStart() {
           <div className="px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100/50 border-b border-gray-200/60">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Live Attendance List</h2>
-              <button
-                onClick={() => fetchAttendees()}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
-              >
-                <FaSpinner className="w-4 h-4" />
-                Refresh Now
-              </button>
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-gray-600">
+                  Total: <span className="font-bold text-gray-900">{attendees.length}</span> / {studentCount || '?'}
+                </span>
+                <button
+                  onClick={() => fetchAttendees()}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  <FaSpinner className="w-4 h-4" />
+                  Refresh Now
+                </button>
+              </div>
             </div>
           </div>
           
@@ -484,6 +632,9 @@ function TeacherAttendanceStart() {
                 </div>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No Attendance Marked Yet</h3>
                 <p className="text-gray-600">Waiting for students to mark their attendance...</p>
+                <p className="text-sm text-amber-600 mt-4">
+                  ⚠️ Remember: Each student can only mark attendance ONCE
+                </p>
               </div>
             ) : (
               <table className="min-w-full divide-y divide-gray-200/60">
@@ -568,8 +719,13 @@ function TeacherAttendanceStart() {
                   Showing <span className="font-semibold text-gray-900">{attendees.length}</span> students
                 </div>
               </div>
-              <div className="text-sm text-gray-600">
-                Auto-refreshing every 5 seconds • Last update: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-gray-600">
+                  Auto-refreshing every 5 seconds
+                </span>
+                <span className="text-sm font-medium text-amber-600">
+                  ⚠️ One attendance per student
+                </span>
               </div>
             </div>
           </div>
@@ -586,11 +742,11 @@ function TeacherAttendanceStart() {
               <ul className="text-sm text-blue-700 space-y-2">
                 <li className="flex items-start">
                   <span className="mr-2">•</span>
-                  <span>Attendance session will automatically end when timer reaches 0</span>
+                  <span className="font-bold">Attendance Limitation:</span> Each student can mark attendance ONLY ONCE per session
                 </li>
                 <li className="flex items-start">
                   <span className="mr-2">•</span>
-                  <span>Students can mark attendance until the session ends</span>
+                  <span>Attendance session will automatically end when timer reaches 0</span>
                 </li>
                 <li className="flex items-start">
                   <span className="mr-2">•</span>

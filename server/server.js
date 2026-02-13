@@ -131,7 +131,7 @@ app.get('/api/health', (req, res) => {
 app.get('/api/test', (req, res) => {
   res.json({
     success: true,
-    message: 'Server is working'
+    message: 'Server is working fine'
   });
 });
 

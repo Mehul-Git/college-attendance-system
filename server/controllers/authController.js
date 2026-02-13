@@ -20,8 +20,8 @@ const sendTokenResponse = (user, statusCode, res) => {
   // ✅ HTTP-ONLY COOKIE (AUTH SOURCE OF TRUTH)
   res.cookie("token", token, {
     httpOnly: true,
-    sameSite: "lax", // required for localhost
-    secure: false, // true only in production (HTTPS)
+    sameSite: "none", // required for localhost
+    secure: true, // true only in production (HTTPS)
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
 
@@ -216,8 +216,8 @@ exports.login = catchAsync(async (req, res) => {
 exports.logout = (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
-    sameSite: "lax",
-    secure: false,
+    sameSite: "none",
+    secure: true,
   });
 
   res.json({

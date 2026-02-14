@@ -17,16 +17,10 @@ const generateToken = (id, role, email) => {
 const sendTokenResponse = (user, statusCode, res) => {
   const token = generateToken(user._id, user.role, user.email);
 
-  // ✅ HTTP-ONLY COOKIE (AUTH SOURCE OF TRUTH)
-  res.cookie("token", token, {
-    httpOnly: true,
-    sameSite: "none", // required for localhost
-    secure: true, // true only in production (HTTPS)
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  });
-
+  // ✅ NO COOKIES - Send token in JSON response
   res.status(statusCode).json({
     success: true,
+    token, // Token sent in response body
     user: {
       id: user._id,
       name: user.name,
@@ -214,12 +208,7 @@ exports.login = catchAsync(async (req, res) => {
 ===================================================== */
 
 exports.logout = (req, res) => {
-  res.clearCookie("token", {
-    httpOnly: true,
-    sameSite: "none",
-    secure: true,
-  });
-
+  // No cookies to clear, just send success
   res.json({
     success: true,
     message: "Logged out successfully",
@@ -261,16 +250,21 @@ exports.resetDeviceId = catchAsync(async (req, res) => {
 });
 
 /* =====================================================
-   🔐 PROTECT (COOKIE-BASED AUTH)
+   🔐 PROTECT (HEADER-BASED AUTH - UPDATED)
 ===================================================== */
 
 exports.protect = catchAsync(async (req, res, next) => {
   let token;
 
-  if (req.cookies && req.cookies.token) {
-    token = req.cookies.token;
+  // ✅ Check Authorization header (Bearer token)
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer")
+  ) {
+    token = req.headers.authorization.split(" ")[1];
   }
 
+  // ❌ No longer checking cookies
   if (!token) {
     return res.status(401).json({
       success: false,
@@ -278,21 +272,29 @@ exports.protect = catchAsync(async (req, res, next) => {
     });
   }
 
-  const decoded = jwt.verify(
-    token,
-    process.env.JWT_SECRET || "your-jwt-secret-key-here",
-  );
+  try {
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || "your-jwt-secret-key-here",
+    );
 
-  const user = await User.findById(decoded.id).populate("department", "name");
-  if (!user) {
+    const user = await User.findById(decoded.id).populate("department", "name");
+    
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User no longer exists",
+      });
+    }
+
+    req.user = user;
+    next();
+  } catch (error) {
     return res.status(401).json({
       success: false,
-      message: "User no longer exists",
+      message: "Invalid or expired token",
     });
   }
-
-  req.user = user;
-  next();
 });
 
 /* =====================================================
@@ -320,9 +322,6 @@ exports.getMe = catchAsync(async (req, res) => {
   });
 });
 
-
-// Add this to authController.js after existing methods
-
 /* =====================================================
    🔑 ADMIN RESET PASSWORD
 ===================================================== */
@@ -336,7 +335,6 @@ exports.adminResetPassword = catchAsync(async (req, res) => {
     });
   }
 
-  // Find user (admin can reset any user's password)
   const user = await User.findById(userId);
   if (!user) {
     return res.status(404).json({
@@ -345,7 +343,6 @@ exports.adminResetPassword = catchAsync(async (req, res) => {
     });
   }
 
-  // Update password
   user.password = newPassword;
   await user.save();
 
@@ -380,7 +377,6 @@ exports.adminResetDeviceId = catchAsync(async (req, res) => {
     });
   }
 
-  // Reset device ID
   student.deviceId = null;
   await student.save();
 
@@ -390,13 +386,10 @@ exports.adminResetDeviceId = catchAsync(async (req, res) => {
   });
 });
 
-
-
 /* =====================================================
    🔐 ADMIN FORGOT PASSWORD - SECURITY QUESTIONS
 ===================================================== */
 
-// Get security question for admin
 exports.getSecurityQuestion = catchAsync(async (req, res) => {
   const { email } = req.params;
 
@@ -419,7 +412,6 @@ exports.getSecurityQuestion = catchAsync(async (req, res) => {
     });
   }
 
-  // Check if account is locked due to too many attempts
   if (user.passwordResetLockUntil && user.passwordResetLockUntil > Date.now()) {
     const minutesRemaining = Math.ceil((user.passwordResetLockUntil - Date.now()) / 60000);
     return res.status(429).json({
@@ -429,7 +421,6 @@ exports.getSecurityQuestion = catchAsync(async (req, res) => {
     });
   }
 
-  // If no security question set, return available questions for setup
   if (!user.securityQuestion) {
     const availableQuestions = [
       'What was your childhood nickname?',
@@ -450,7 +441,6 @@ exports.getSecurityQuestion = catchAsync(async (req, res) => {
     });
   }
 
-  // Reset attempts counter if lock has expired
   if (user.passwordResetLockUntil && user.passwordResetLockUntil < Date.now()) {
     user.passwordResetAttempts = 0;
     user.passwordResetLockUntil = null;
@@ -465,7 +455,6 @@ exports.getSecurityQuestion = catchAsync(async (req, res) => {
   });
 });
 
-// Set security question and answer for admin
 exports.setSecurityQuestion = catchAsync(async (req, res) => {
   const { email, question, answer } = req.body;
 
@@ -501,7 +490,6 @@ exports.setSecurityQuestion = catchAsync(async (req, res) => {
   });
 });
 
-// Verify security answer and reset password
 exports.verifySecurityAndResetPassword = catchAsync(async (req, res) => {
   const { email, answer, newPassword } = req.body;
 
@@ -524,7 +512,6 @@ exports.verifySecurityAndResetPassword = catchAsync(async (req, res) => {
     });
   }
 
-  // Check if account is locked
   if (user.passwordResetLockUntil && user.passwordResetLockUntil > Date.now()) {
     const minutesRemaining = Math.ceil((user.passwordResetLockUntil - Date.now()) / 60000);
     return res.status(429).json({
@@ -534,7 +521,6 @@ exports.verifySecurityAndResetPassword = catchAsync(async (req, res) => {
     });
   }
 
-  // Check if security question is set
   if (!user.securityQuestion || !user.securityAnswer) {
     return res.status(400).json({
       success: false,
@@ -543,16 +529,13 @@ exports.verifySecurityAndResetPassword = catchAsync(async (req, res) => {
     });
   }
 
-  // Verify answer
   const isAnswerCorrect = await user.compareSecurityAnswer(answer);
 
   if (!isAnswerCorrect) {
-    // Increment failed attempts
     user.passwordResetAttempts = (user.passwordResetAttempts || 0) + 1;
     
-    // Lock account after 5 failed attempts
     if (user.passwordResetAttempts >= 5) {
-      user.passwordResetLockUntil = new Date(Date.now() + 30 * 60 * 1000); // Lock for 30 minutes
+      user.passwordResetLockUntil = new Date(Date.now() + 30 * 60 * 1000);
     }
     
     await user.save({ validateBeforeSave: false });
@@ -569,7 +552,6 @@ exports.verifySecurityAndResetPassword = catchAsync(async (req, res) => {
     });
   }
 
-  // Reset password
   user.password = newPassword;
   user.passwordResetAttempts = 0;
   user.passwordResetLockUntil = null;
@@ -583,7 +565,6 @@ exports.verifySecurityAndResetPassword = catchAsync(async (req, res) => {
   });
 });
 
-// Update security question (authenticated)
 exports.updateSecurityQuestion = catchAsync(async (req, res) => {
   const { question, answer } = req.body;
 

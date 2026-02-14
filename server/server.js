@@ -27,7 +27,9 @@ app.set('trust proxy', 1);
 /* =====================================================
    🔐 SECURITY MIDDLEWARE
 ===================================================== */
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" } // Allow cross-origin requests
+}));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -36,31 +38,41 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
+// Cookie parser is kept for any non-auth cookies (optional, can be removed if not used elsewhere)
 app.use(cookieParser());
 
 /* =====================================================
-   🌍 CORS CONFIG (Vercel + Localhost)
+   🌍 UPDATED CORS CONFIG - NO CREDENTIALS NEEDED
 ===================================================== */
 app.use(
   cors({
     origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps, curl, etc)
       if (!origin) return callback(null, true);
 
       const allowedOrigins = [
         process.env.FRONTEND_URL,   // Vercel URL
         'http://localhost:5173',
+        'http://localhost:3000',
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:3000',
       ];
 
+      // Allow all Vercel deployments and Cloudflare tunnels
       if (
         allowedOrigins.includes(origin) ||
-        origin.endsWith('.vercel.app')
+        origin.endsWith('.vercel.app') ||
+        origin.includes('trycloudflare.com') ||
+        origin.includes('localhost')
       ) {
         callback(null, true);
       } else {
+        console.log('❌ CORS blocked origin:', origin);
         callback(new Error('Not allowed by CORS'));
       }
     },
-    credentials: true,
+    // credentials: false, // Not needed for token-based auth (can be omitted or set to false)
+    optionsSuccessStatus: 200 // Some legacy browsers choke on 204
   })
 );
 
@@ -93,11 +105,14 @@ const connectDB = async () => {
 connectDB();
 
 /* =====================================================
-   🧪 DEV REQUEST LOGGER
+   🧪 DEV REQUEST LOGGER (Enhanced to show auth headers)
 ===================================================== */
 if (process.env.NODE_ENV === 'development') {
   app.use((req, res, next) => {
-    console.log(`${req.method} ${req.originalUrl}`);
+    console.log(`\n📍 ${req.method} ${req.originalUrl}`);
+    if (req.headers.authorization) {
+      console.log('🔐 Auth:', req.headers.authorization.substring(0, 30) + '...');
+    }
     next();
   });
 }
@@ -122,20 +137,40 @@ app.get('/api/health', (req, res) => {
     success: true,
     message: 'College Attendance System API',
     timestamp: new Date().toISOString(),
-    database:
-      mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    auth: 'JWT header-based',
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
 /* =====================================================
-   🧪 TEST ROUTE
+   🧪 TEST ROUTE (Enhanced)
 ===================================================== */
 app.get('/api/test', (req, res) => {
   res.json({
     success: true,
     message: 'Server is working fine',
+    authMethod: 'JWT Bearer Token',
+    timestamp: new Date().toISOString()
   });
 });
+
+/* =====================================================
+   🔍 DEBUG AUTH ENDPOINT (Temporary - remove in production)
+===================================================== */
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/api/debug-auth', (req, res) => {
+    const authHeader = req.headers.authorization;
+    res.json({
+      success: true,
+      hasAuthHeader: !!authHeader,
+      authHeaderPreview: authHeader ? authHeader.substring(0, 30) + '...' : null,
+      cookies: req.cookies,
+      method: req.method,
+      url: req.url
+    });
+  });
+}
 
 /* =====================================================
    ❌ 404 HANDLER
@@ -153,12 +188,26 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error('🚨 ERROR:', err.stack);
 
+  // Handle specific JWT errors
+  if (err.name === 'JsonWebTokenError') {
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid token',
+    });
+  }
+
+  if (err.name === 'TokenExpiredError') {
+    return res.status(401).json({
+      success: false,
+      message: 'Token expired',
+    });
+  }
+
   res.status(err.statusCode || 500).json({
     success: false,
-    message:
-      process.env.NODE_ENV === 'production'
-        ? 'Internal Server Error'
-        : err.message,
+    message: process.env.NODE_ENV === 'production'
+      ? 'Internal Server Error'
+      : err.message,
   });
 });
 
@@ -170,6 +219,8 @@ const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('\n🚀 Server running on port', PORT);
   console.log('🌍 Environment:', process.env.NODE_ENV || 'development');
+  console.log('🔐 Auth Method: JWT Bearer Token (Headers)');
+  console.log('🌐 CORS: Configured for Vercel + Localhost + Cloudflare\n');
 });
 
 /* =====================================================
@@ -189,7 +240,9 @@ process.on('SIGINT', () => {
   console.log('👋 SIGINT received. Shutting down...');
   server.close(() => {
     mongoose.connection.close(false, () => {
+      console.log('🔌 MongoDB connection closed.');
       process.exit(0);
     });
   });
 });
+

@@ -42,7 +42,7 @@ function TeacherAttendanceStart() {
   useEffect(() => {
     const fetchScheduleInfo = async () => {
       try {
-        const res = await API.get(`/class-schedule/${scheduleId}`);
+        const res = await API.get(`/class-schedules/${scheduleId}`);
         if (res.data.success) {
           setSessionInfo(res.data.schedule);
           

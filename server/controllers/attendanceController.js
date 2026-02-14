@@ -4,12 +4,67 @@ const AttendanceSession = require('../models/AttendanceSession');
 const ClassSchedule = require('../models/ClassSchedule');
 const User = require('../models/User');
 const catchAsync = require('../utils/catchAsync');
+const moment = require('moment-timezone');
+
+/* ============================
+   🌏 IST TIMEZONE HELPERS (Fixed)
+============================ */
+const IST_TIMEZONE = 'Asia/Kolkata';
+const SESSION_DURATION_MINUTES = 5;
+
+// Get current time in IST as moment object
+const getISTMoment = () => {
+  return moment().tz(IST_TIMEZONE);
+};
+
+// Convert Date object to IST moment
+const toISTMoment = (date) => {
+  return moment(date).tz(IST_TIMEZONE);
+};
+
+// Check if current IST time is within session window
+const isWithinSessionWindow = (sessionStart, sessionEnd) => {
+  const nowIST = getISTMoment();
+  const startIST = toISTMoment(sessionStart);
+  const endIST = toISTMoment(sessionEnd);
+  
+  return nowIST.isBetween(startIST, endIST, null, '[]'); // '[]' includes boundaries
+};
+
+// Format time for display (e.g., "10:30 AM")
+const formatISTTime = (date) => {
+  return toISTMoment(date).format('hh:mm A');
+};
+
+// Format full date for display (e.g., "15 Jan 2024, 10:30 AM")
+const formatISTDateTime = (date) => {
+  return toISTMoment(date).format('DD MMM YYYY, hh:mm A');
+};
+
+// Get current day in IST (matches schedule.days format - "Mon", "Tue", etc.)
+const getCurrentISTDay = () => {
+  return getISTMoment().format('ddd');
+};
+
+// Debug logger for time-related issues
+const logTimeDebug = (context, session) => {
+  console.log(`⏰ [${context}] Time check:`, {
+    nowIST: getISTMoment().format(),
+    nowUTC: new Date().toISOString(),
+    timezone: IST_TIMEZONE,
+    sessionStartIST: toISTMoment(session.startTime).format(),
+    sessionEndIST: toISTMoment(session.endTime).format(),
+    sessionStartUTC: session.startTime.toISOString(),
+    sessionEndUTC: session.endTime.toISOString(),
+    isWithinWindow: isWithinSessionWindow(session.startTime, session.endTime)
+  });
+};
 
 /* ============================
    📍 GEO DISTANCE (HAVERSINE)
 ============================ */
 const getDistance = (lat1, lon1, lat2, lon2) => {
-  const R = 6371000;
+  const R = 6371000; // Earth's radius in meters
   const toRad = (v) => (v * Math.PI) / 180;
 
   const dLat = toRad(lat2 - lat1);
@@ -25,7 +80,7 @@ const getDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 /* ============================
-   🧠 HELPERS (CRITICAL FIX)
+   🧠 NORMALIZE OBJECT IDS
 ============================ */
 const normalizeId = (val) => {
   if (!val) return null;
@@ -40,6 +95,7 @@ exports.startAttendance = catchAsync(async (req, res) => {
   const teacherId = req.user._id;
   const { classScheduleId, latitude, longitude } = req.body;
 
+  // Validation
   if (!classScheduleId || latitude == null || longitude == null) {
     return res.status(400).json({
       success: false,
@@ -47,6 +103,7 @@ exports.startAttendance = catchAsync(async (req, res) => {
     });
   }
 
+  // Get schedule
   const schedule = await ClassSchedule.findById(classScheduleId).populate(
     'subject department'
   );
@@ -58,6 +115,7 @@ exports.startAttendance = catchAsync(async (req, res) => {
     });
   }
 
+  // Check teacher authorization
   if (schedule.teacher.toString() !== teacherId.toString()) {
     return res.status(403).json({
       success: false,
@@ -65,16 +123,25 @@ exports.startAttendance = catchAsync(async (req, res) => {
     });
   }
 
-  const today = new Date().toLocaleString('en-US', { weekday: 'short' });
+  /* 🌏 DAY CHECK (IST) */
+  const today = getCurrentISTDay();
+  
+  console.log('📅 Day check:', { 
+    today, 
+    scheduleDays: schedule.days,
+    matches: schedule.days.includes(today)
+  });
+
   if (!schedule.days.includes(today)) {
     return res.status(403).json({
       success: false,
-      message: 'No class scheduled for today',
+      message: `No class scheduled for today. Today is ${today}, schedule shows: ${schedule.days.join(', ')}`,
     });
   }
 
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  /* 🌏 TIME CHECK (IST) */
+  const nowIST = getISTMoment();
+  const currentMinutes = nowIST.hours() * 60 + nowIST.minutes();
 
   const [sh, sm] = schedule.startTime.split(':').map(Number);
   const [eh, em] = schedule.endTime.split(':').map(Number);
@@ -85,17 +152,19 @@ exports.startAttendance = catchAsync(async (req, res) => {
   if (currentMinutes < startMinutes || currentMinutes > endMinutes) {
     return res.status(403).json({
       success: false,
-      message: 'Attendance can only be started during class time',
+      message: `Attendance can only be started during class time (${schedule.startTime} - ${schedule.endTime} IST)`,
     });
   }
 
+  // Close any existing active sessions for this class
   await AttendanceSession.updateMany(
     { classSchedule: classScheduleId, isActive: true },
     { isActive: false, isLocked: true }
   );
 
-  const startTime = new Date();
-  const endTime = new Date(startTime.getTime() + 5 * 60 * 1000);
+  // Create new session (5 minutes duration)
+  const startTime = new Date(); // UTC
+  const endTime = new Date(startTime.getTime() + SESSION_DURATION_MINUTES * 60 * 1000);
 
   const session = await AttendanceSession.create({
     classSchedule: classScheduleId,
@@ -110,10 +179,16 @@ exports.startAttendance = catchAsync(async (req, res) => {
     isLocked: false,
   });
 
+  // Return with IST formatted times
+  const sessionObj = session.toObject();
+  sessionObj.startTimeIST = formatISTDateTime(session.startTime);
+  sessionObj.endTimeIST = formatISTDateTime(session.endTime);
+  sessionObj.timezone = IST_TIMEZONE;
+
   res.status(201).json({
     success: true,
-    message: 'Attendance session started',
-    session,
+    message: 'Attendance session started successfully',
+    session: sessionObj,
   });
 });
 
@@ -129,14 +204,15 @@ exports.markAttendance = catchAsync(async (req, res) => {
     sessionId,
   });
 
+  // Validation
   if (!sessionId || latitude == null || longitude == null || !deviceId) {
     return res.status(400).json({
       success: false,
-      message:
-        'Missing required fields: sessionId, latitude, longitude, deviceId',
+      message: 'Missing required fields: sessionId, latitude, longitude, deviceId',
     });
   }
 
+  // Get session with populated class schedule
   const session = await AttendanceSession.findById(sessionId).populate({
     path: 'classSchedule',
     populate: [
@@ -145,63 +221,79 @@ exports.markAttendance = catchAsync(async (req, res) => {
     ],
   });
 
-  if (!session || !session.isActive || session.isLocked) {
+  // Check if session exists and is active
+  if (!session) {
+    return res.status(404).json({
+      success: false,
+      message: 'Attendance session not found',
+    });
+  }
+
+  if (!session.isActive || session.isLocked) {
     return res.status(400).json({
       success: false,
-      message: 'Attendance is closed',
+      message: 'Attendance session is not active',
     });
   }
 
-  const now = new Date();
-  if (now < session.startTime || now > session.endTime) {
+  /* 🌏 TIME CHECK (IST) */
+  if (!isWithinSessionWindow(session.startTime, session.endTime)) {
+    logTimeDebug('MARK_ATTENDANCE_FAILED', session);
+    
     return res.status(403).json({
       success: false,
-      message: 'Attendance window expired',
+      message: `Attendance window expired. Active window: ${formatISTTime(session.startTime)} - ${formatISTTime(session.endTime)} IST`,
     });
   }
 
-  /* 🎓 ELIGIBILITY */
+  /* 🎓 ELIGIBILITY CHECKS */
   const studentDeptId = normalizeId(student.department);
   const sessionDeptId = normalizeId(session.classSchedule.department);
 
+  // Department check
   if (studentDeptId !== sessionDeptId) {
-    console.log('❌ Department mismatch');
+    console.log('❌ Department mismatch:', { studentDeptId, sessionDeptId });
     return res.status(403).json({
       success: false,
       message: 'You are not enrolled in this department',
     });
   }
 
+  // Semester check
   if (
     student.semester != null &&
     session.classSchedule.semester !== student.semester
   ) {
-    console.log('❌ Semester mismatch');
+    console.log('❌ Semester mismatch:', { studentSemester: student.semester, scheduleSemester: session.classSchedule.semester });
     return res.status(403).json({
       success: false,
       message: 'You are not enrolled in this semester',
     });
   }
 
+  // Section check (if applicable)
   if (
     student.section &&
     session.classSchedule.section &&
     student.section !== session.classSchedule.section
   ) {
-    console.log('❌ Section mismatch');
+    console.log('❌ Section mismatch:', { studentSection: student.section, scheduleSection: session.classSchedule.section });
     return res.status(403).json({
       success: false,
       message: 'You are not enrolled in this section',
     });
   }
 
+  // Device check
   if (student.deviceId !== deviceId) {
+    console.log('❌ Device mismatch:', { storedDevice: student.deviceId, providedDevice: deviceId });
     return res.status(403).json({
       success: false,
-      message: 'Device mismatch',
+      message: 'Device mismatch. Please use your registered device.',
     });
   }
 
+  /* 📍 GEOFENCE CHECK */
   const distance = getDistance(
     Number(latitude),
     Number(longitude),
@@ -212,10 +304,11 @@ exports.markAttendance = catchAsync(async (req, res) => {
   if (distance > session.radiusInMeters) {
     return res.status(403).json({
       success: false,
-      message: 'Outside allowed location',
+      message: `You are ${Math.round(distance)}m away from class. Must be within ${session.radiusInMeters}m.`,
     });
   }
 
+  // Check for duplicate attendance
   const alreadyMarked = await Attendance.findOne({
     student: student._id,
     session: session._id,
@@ -224,10 +317,11 @@ exports.markAttendance = catchAsync(async (req, res) => {
   if (alreadyMarked) {
     return res.status(400).json({
       success: false,
-      message: 'Attendance already marked',
+      message: 'Attendance already marked for this session',
     });
   }
 
+  // Create attendance record
   const attendance = await Attendance.create({
     student: student._id,
     session: session._id,
@@ -237,6 +331,7 @@ exports.markAttendance = catchAsync(async (req, res) => {
     },
   });
 
+  // Create detailed attendance record
   await AttendanceRecord.create({
     session: session._id,
     student: student._id,
@@ -245,29 +340,45 @@ exports.markAttendance = catchAsync(async (req, res) => {
     status: 'present',
     deviceId,
     ipAddress: req.ip,
+    markedAt: new Date(),
   });
 
+  // Update student's current session
   student.currentSession = session._id;
   await student.save({ validateBeforeSave: false });
+
+  // Log success
+  console.log('✅ Attendance marked successfully:', {
+    studentId: student._id,
+    sessionId: session._id,
+    time: formatISTDateTime(new Date()),
+    distance: Math.round(distance) + 'm',
+  });
 
   res.json({
     success: true,
     message: 'Attendance marked successfully',
-    attendance,
+    attendance: {
+      ...attendance.toObject(),
+      markedAtIST: formatISTDateTime(attendance.markedAt),
+    },
   });
 });
 
 /* ============================
-   🧑‍🎓 GET ACTIVE SESSION
+   🧑‍🎓 GET ACTIVE SESSION (STUDENT)
 ============================ */
 exports.getActiveSessionForStudent = catchAsync(async (req, res) => {
   const student = req.user;
+  
+  // Use regular Date for MongoDB query (UTC comparison works fine)
   const now = new Date();
 
+  // Find all active sessions
   const sessions = await AttendanceSession.find({
     isActive: true,
     isLocked: false,
-    endTime: { $gt: now },
+    endTime: { $gt: now }, // Only sessions that haven't ended yet
   }).populate({
     path: 'classSchedule',
     populate: [
@@ -279,6 +390,7 @@ exports.getActiveSessionForStudent = catchAsync(async (req, res) => {
 
   const studentDeptId = normalizeId(student.department);
 
+  // Find eligible session for this student
   const eligible = sessions.find((s) => {
     const sessionDeptId = normalizeId(s.classSchedule.department);
 
@@ -301,9 +413,16 @@ exports.getActiveSessionForStudent = catchAsync(async (req, res) => {
   if (!eligible) {
     return res.status(404).json({
       success: false,
-      message: 'No active attendance session found',
+      message: 'No active attendance session found for your class',
     });
   }
+
+  // Check if session is currently active in IST
+  const isActiveNow = isWithinSessionWindow(eligible.startTime, eligible.endTime);
+  
+  // Calculate remaining seconds if active
+  const remainingSeconds = isActiveNow ? 
+    Math.max(0, Math.floor((eligible.endTime - now) / 1000)) : 0;
 
   res.json({
     success: true,
@@ -313,6 +432,11 @@ exports.getActiveSessionForStudent = catchAsync(async (req, res) => {
       radiusInMeters: eligible.radiusInMeters,
       startTime: eligible.startTime,
       endTime: eligible.endTime,
+      startTimeIST: formatISTTime(eligible.startTime),
+      endTimeIST: formatISTTime(eligible.endTime),
+      isActiveNow,
+      remainingSeconds,
+      timezone: IST_TIMEZONE,
       subject: eligible.classSchedule.subject,
       teacher: eligible.classSchedule.teacher,
       department: eligible.classSchedule.department,
@@ -321,19 +445,53 @@ exports.getActiveSessionForStudent = catchAsync(async (req, res) => {
 });
 
 /* ============================
-   🧪 DEBUG
+   🧪 DEBUG ENDPOINT
 ============================ */
 exports.testEligibility = catchAsync(async (req, res) => {
+  const nowIST = getISTMoment();
+  const utcNow = moment.utc();
+  
+  // Check day name format consistency
+  const dayFormats = {
+    moment_ddd: nowIST.format('ddd'),
+    moment_dddd: nowIST.format('dddd'),
+    jsDate_short: new Date().toLocaleString('en-US', { weekday: 'short', timeZone: IST_TIMEZONE }),
+    jsDate_long: new Date().toLocaleString('en-US', { weekday: 'long', timeZone: IST_TIMEZONE }),
+  };
+
   res.json({
     success: true,
-    user: req.user,
+    debug: {
+      timezone: IST_TIMEZONE,
+      serverTime: {
+        utc: utcNow.format(),
+        utcISO: new Date().toISOString(),
+        ist: nowIST.format(),
+        istOffset: nowIST.format('Z'),
+        istTime: nowIST.format('hh:mm A'),
+        istDate: nowIST.format('DD MMM YYYY'),
+        istDay: nowIST.format('dddd'),
+        istDayShort: nowIST.format('ddd'),
+      },
+      dayFormats,
+      user: {
+        id: req.user._id,
+        role: req.user.role,
+        department: req.user.department,
+        semester: req.user.semester,
+        section: req.user.section,
+        deviceId: req.user.deviceId,
+      },
+      recommendation: "Your schedule.days should match the 'ddd' format (Mon, Tue, Wed, Thu, Fri, Sat, Sun)",
+    }
   });
 });
 
 /* ============================
-   👨‍🏫 LIVE ATTENDANCE
+   👨‍🏫 LIVE ATTENDANCE (TEACHER)
 ============================ */
 exports.getLiveAttendanceStatus = catchAsync(async (req, res) => {
+  // Check teacher role
   if (req.user.role !== 'teacher') {
     return res.status(403).json({
       success: false,
@@ -341,6 +499,7 @@ exports.getLiveAttendanceStatus = catchAsync(async (req, res) => {
     });
   }
 
+  // Get session
   const session = await AttendanceSession.findById(req.params.sessionId).populate({
     path: 'classSchedule',
     populate: [
@@ -356,26 +515,47 @@ exports.getLiveAttendanceStatus = catchAsync(async (req, res) => {
     });
   }
 
+  // Check authorization
   if (session.classSchedule.teacher.toString() !== req.user._id.toString()) {
     return res.status(403).json({
       success: false,
-      message: 'Not authorized',
+      message: 'You are not authorized to view this session',
     });
   }
 
+  // Get attendance records
   const attendance = await Attendance.find({ session: session._id }).populate(
     'student',
     'name studentId email'
   );
 
+  // Check if session is active in IST
+  const isActiveNow = isWithinSessionWindow(session.startTime, session.endTime);
+
+  // Prepare session info with IST times
+  const sessionInfo = {
+    id: session._id,
+    startTime: session.startTime,
+    endTime: session.endTime,
+    startTimeIST: formatISTDateTime(session.startTime),
+    endTimeIST: formatISTDateTime(session.endTime),
+    isActiveNow,
+    timezone: IST_TIMEZONE,
+    subject: session.classSchedule.subject,
+    department: session.classSchedule.department,
+    totalStudents: attendance.length,
+  };
+
   res.json({
     success: true,
+    session: sessionInfo,
     students: attendance.map((a) => ({
       id: a.student._id,
       name: a.student.name,
       studentId: a.student.studentId,
       email: a.student.email,
       markedAt: a.markedAt,
+      markedAtIST: a.markedAt ? formatISTDateTime(a.markedAt) : null,
     })),
   });
 });
@@ -384,6 +564,7 @@ exports.getLiveAttendanceStatus = catchAsync(async (req, res) => {
    👤 SESSION DETAILS (STUDENT)
 ============================ */
 exports.getSessionDetails = catchAsync(async (req, res) => {
+  // Check student role
   if (req.user.role !== 'student') {
     return res.status(403).json({
       success: false,
@@ -391,6 +572,7 @@ exports.getSessionDetails = catchAsync(async (req, res) => {
     });
   }
 
+  // Get session
   const session = await AttendanceSession.findById(req.params.sessionId).populate({
     path: 'classSchedule',
     populate: [
@@ -409,6 +591,7 @@ exports.getSessionDetails = catchAsync(async (req, res) => {
 
   const student = req.user;
 
+  // Check if student is eligible for this session
   const studentDeptId = normalizeId(student.department);
   const sessionDeptId = normalizeId(session.classSchedule.department);
 
@@ -426,10 +609,18 @@ exports.getSessionDetails = catchAsync(async (req, res) => {
     });
   }
 
+  // Check if student has marked attendance
   const marked = await Attendance.findOne({
     student: student._id,
     session: session._id,
   });
+
+  // Check if session is currently active in IST
+  const isActiveNow = isWithinSessionWindow(session.startTime, session.endTime);
+  
+  // Calculate remaining seconds if active
+  const remainingSeconds = isActiveNow ? 
+    Math.max(0, Math.floor((session.endTime - new Date()) / 1000)) : 0;
 
   res.json({
     success: true,
@@ -438,11 +629,28 @@ exports.getSessionDetails = catchAsync(async (req, res) => {
       location: session.location,
       radiusInMeters: session.radiusInMeters,
       startTime: session.startTime,
+      startTimeIST: formatISTTime(session.startTime),
       endTime: session.endTime,
+      endTimeIST: formatISTTime(session.endTime),
+      isActiveNow,
+      remainingSeconds,
       hasMarked: !!marked,
+      markedAtIST: marked ? formatISTDateTime(marked.markedAt) : null,
+      timezone: IST_TIMEZONE,
       subject: session.classSchedule.subject,
       teacher: session.classSchedule.teacher,
       department: session.classSchedule.department,
     },
   });
 });
+
+// Export helpers for potential use in other files
+module.exports.helpers = {
+  getISTMoment,
+  toISTMoment,
+  formatISTTime,
+  formatISTDateTime,
+  isWithinSessionWindow,
+  getCurrentISTDay,
+  IST_TIMEZONE,
+};

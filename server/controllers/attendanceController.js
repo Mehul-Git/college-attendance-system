@@ -654,3 +654,193 @@ module.exports.helpers = {
   getCurrentISTDay,
   IST_TIMEZONE,
 };
+
+/* ============================
+   📊 GET COMPLETED SESSIONS FOR TEACHER
+============================ */
+exports.getCompletedSessions = catchAsync(async (req, res) => {
+  try {
+    const teacherId = req.user._id;
+    const { date } = req.query;
+    
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        message: 'Date parameter is required'
+      });
+    }
+
+    // Set start and end of the day in IST
+    const startOfDay = moment.tz(date, IST_TIMEZONE).startOf('day').toDate();
+    const endOfDay = moment.tz(date, IST_TIMEZONE).endOf('day').toDate();
+    
+    console.log('🔍 Fetching completed sessions:', {
+      teacherId,
+      date,
+      startOfDay: startOfDay.toISOString(),
+      endOfDay: endOfDay.toISOString()
+    });
+
+    // First get all class schedules for this teacher
+    const classSchedules = await ClassSchedule.find({ 
+      teacher: teacherId 
+    }).select('_id');
+    
+    const scheduleIds = classSchedules.map(s => s._id);
+
+    // Find all attendance sessions created by this teacher today that are closed/inactive
+    const sessions = await AttendanceSession.find({
+      classSchedule: { $in: scheduleIds },
+      createdAt: { $gte: startOfDay, $lte: endOfDay },
+      isActive: false
+    }).populate('classSchedule', 'subject department semester section');
+
+    // For each session, check if it has any attendance records
+    const completedSessions = [];
+    
+    for (const session of sessions) {
+      const attendanceCount = await Attendance.countDocuments({ 
+        session: session._id 
+      });
+      
+      // Only include sessions that actually had attendance marked
+      if (attendanceCount > 0) {
+        completedSessions.push({
+          _id: session._id,
+          classScheduleId: session.classSchedule._id,
+          subjectName: session.classSchedule.subject?.name || 'Unknown',
+          departmentName: session.classSchedule.department?.name || 'Unknown',
+          semester: session.classSchedule.semester,
+          section: session.classSchedule.section,
+          startTime: session.startTime,
+          endTime: session.endTime,
+          studentCount: attendanceCount,
+          createdAt: session.createdAt
+        });
+      }
+    }
+
+    console.log(`✅ Found ${completedSessions.length} completed sessions for teacher`);
+
+    res.json({
+      success: true,
+      sessions: completedSessions
+    });
+  } catch (error) {
+    console.error('❌ Error fetching completed sessions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch completed sessions',
+      error: error.message
+    });
+  }
+});
+
+// Also add a simpler version for just checking if a session was completed today
+exports.checkTodaySessions = catchAsync(async (req, res) => {
+  try {
+    const teacherId = req.user._id;
+    
+    // Get today's date in IST
+    const today = moment().tz(IST_TIMEZONE).startOf('day');
+    const tomorrow = moment(today).add(1, 'day');
+
+    // Find all class schedules for this teacher
+    const classSchedules = await ClassSchedule.find({ 
+      teacher: teacherId 
+    }).select('_id');
+    
+    const scheduleIds = classSchedules.map(s => s._id);
+
+    // Find completed sessions for today
+    const sessions = await AttendanceSession.find({
+      classSchedule: { $in: scheduleIds },
+      createdAt: { 
+        $gte: today.toDate(), 
+        $lt: tomorrow.toDate() 
+      },
+      isActive: false
+    }).select('classSchedule');
+
+    // Create a map of completed schedule IDs
+    const completedMap = {};
+    sessions.forEach(session => {
+      completedMap[session.classSchedule.toString()] = true;
+    });
+
+    res.json({
+      success: true,
+      completed: completedMap
+    });
+  } catch (error) {
+    console.error('❌ Error checking today sessions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check sessions',
+      error: error.message
+    });
+  }
+});
+
+/* ============================
+   🔚 CLOSE ATTENDANCE SESSION (TEACHER)
+============================ */
+exports.closeAttendanceSession = catchAsync(async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const teacherId = req.user._id;
+
+    // Find the session
+    const session = await AttendanceSession.findById(sessionId).populate({
+      path: 'classSchedule',
+      select: 'teacher'
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Attendance session not found'
+      });
+    }
+
+    // Check if teacher owns this session
+    if (session.classSchedule.teacher.toString() !== teacherId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to close this session'
+      });
+    }
+
+    // Update session to inactive
+    session.isActive = false;
+    session.isLocked = true;
+    await session.save();
+
+    // Get attendance count for this session
+    const attendanceCount = await Attendance.countDocuments({ session: sessionId });
+
+    console.log('✅ Session closed successfully:', {
+      sessionId,
+      teacherId,
+      attendanceCount
+    });
+
+    res.json({
+      success: true,
+      message: 'Attendance session closed successfully',
+      data: {
+        sessionId,
+        attendanceCount,
+        closedAt: new Date()
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error closing session:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to close attendance session',
+      error: error.message
+    });
+  }
+});

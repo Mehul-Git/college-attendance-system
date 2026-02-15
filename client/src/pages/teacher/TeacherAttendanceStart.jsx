@@ -137,9 +137,9 @@ function TeacherAttendanceStart() {
       setAttendees(res.data.students || []);
     } catch (err) {
       if (err.response?.status === 403) {
-        setError("Session expired or role changed. Please re-login.");
-        setStatus("idle");
-        setSessionId(null);
+        // Show alert and navigate directly to dashboard
+        alert("Session expired or role changed. Please re-login.");
+        navigate("/teacher");
       }
     }
   };
@@ -181,12 +181,14 @@ function TeacherAttendanceStart() {
   const endSession = async () => {
     try {
       await API.post(`/attendance/close/${sessionId}`);
+      // Show success message and navigate to dashboard
+      alert("Attendance session ended successfully!");
+      navigate("/teacher");
     } catch (err) {
       console.error("Error ending session:", err);
+      alert("Error ending session. Please try again.");
+      navigate("/teacher");
     }
-    
-    // Don't navigate immediately - show summary
-    setStatus("ended");
   };
 
   const formatTime = (seconds) => {
@@ -209,68 +211,6 @@ function TeacherAttendanceStart() {
   const attendancePercentage = studentCount > 0 
     ? Math.round((attendees.length / studentCount) * 100) 
     : 0;
-
-  /* ============================
-     SESSION ENDED VIEW
-  ============================ */
-  if (status === "ended") {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-green-50/30 flex items-center justify-center p-4">
-        <div className="max-w-md w-full">
-          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-2xl border border-green-200/60 p-8 text-center">
-            {/* Success Icon */}
-            <div className="mb-6">
-              <div className="w-24 h-24 bg-gradient-to-br from-green-100 to-emerald-100 rounded-full flex items-center justify-center mx-auto shadow-inner">
-                <div className="absolute inset-0 rounded-full border-2 border-dashed border-green-300/50"></div>
-                <FaCheckDouble className="w-12 h-12 text-green-600" />
-              </div>
-            </div>
-            
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Attendance Session Ended
-            </h2>
-            
-            {/* Summary Cards */}
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50/30 p-4 rounded-xl border border-blue-200/50">
-                <p className="text-sm text-gray-600 mb-1">Total Students</p>
-                <p className="text-3xl font-bold text-blue-600">{studentCount || '--'}</p>
-              </div>
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50/30 p-4 rounded-xl border border-green-200/50">
-                <p className="text-sm text-gray-600 mb-1">Present</p>
-                <p className="text-3xl font-bold text-green-600">{attendees.length}</p>
-              </div>
-            </div>
-            
-            {/* Attendance Rate */}
-            <div className="mb-6 p-4 bg-gradient-to-br from-purple-50 to-pink-50/30 rounded-xl border border-purple-200/50">
-              <p className="text-sm text-gray-600 mb-2">Attendance Rate</p>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">Present</span>
-                <span className="text-sm font-medium text-gray-900">{attendancePercentage}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div 
-                  className="bg-gradient-to-r from-green-500 to-emerald-500 h-2.5 rounded-full transition-all duration-500"
-                  style={{ width: `${attendancePercentage}%` }}
-                ></div>
-              </div>
-            </div>
-            
-            <div className="space-y-3">
-              <button
-                onClick={handleBackToDashboard}
-                className="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-lg"
-              >
-                Back to Dashboard
-              </button>
-              {/* Start New Session button removed as requested */}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   /* ============================
      ERROR VIEW
@@ -502,7 +442,7 @@ function TeacherAttendanceStart() {
               </div>
             </div>
             
-            {/* End Session Button - KEPT AS REQUESTED */}
+            {/* End Session Button */}
             <button
               onClick={handleManualEnd}
               disabled={isSessionExpired}

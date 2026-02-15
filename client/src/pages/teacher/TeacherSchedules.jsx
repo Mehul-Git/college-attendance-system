@@ -15,7 +15,8 @@ import {
   FaFilter,
   FaSync,
   FaRegCalendarAlt,
-  FaLock
+  FaLock,
+  FaCheckCircle
 } from 'react-icons/fa';
 
 function TeacherSchedules() {
@@ -24,10 +25,12 @@ function TeacherSchedules() {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState('all'); // 'all', 'today', 'upcoming'
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [completedSessions, setCompletedSessions] = useState({}); // Track completed sessions
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchSchedules();
+    fetchCompletedSessions();
     
     // Update current time every minute
     const timer = setInterval(() => {
@@ -50,6 +53,26 @@ function TeacherSchedules() {
     }
   };
 
+  // Fetch completed sessions for today
+  const fetchCompletedSessions = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const res = await API.get('/attendance/completed-sessions', {
+        params: { date: today }
+      });
+      
+      if (res.data.success) {
+        const completedMap = {};
+        res.data.sessions.forEach(session => {
+          completedMap[session.classScheduleId] = true;
+        });
+        setCompletedSessions(completedMap);
+      }
+    } catch (err) {
+      console.error('Error fetching completed sessions:', err);
+    }
+  };
+
   const today = new Date().toLocaleString('en-US', { weekday: 'short' });
   
   // Check if session time is over
@@ -66,6 +89,11 @@ function TeacherSchedules() {
     } catch {
       return false;
     }
+  };
+
+  // Check if session has been completed today (attendance already taken)
+  const isSessionCompleted = (scheduleId) => {
+    return completedSessions[scheduleId] === true;
   };
 
   // Check if session is currently active
@@ -89,6 +117,32 @@ function TeacherSchedules() {
     }
   };
 
+  // Check if start button should be disabled
+  const isStartButtonDisabled = (schedule) => {
+    const timeOver = isSessionTimeOver(schedule);
+    const completed = isSessionCompleted(schedule._id);
+    
+    // Disable if:
+    // 1. Session time is over
+    // 2. Session was already completed today
+    // 3. It's not today's class
+    return timeOver || completed || !schedule.days.includes(today);
+  };
+
+  // Get disabled reason message
+  const getDisabledReason = (schedule) => {
+    if (!schedule.days.includes(today)) {
+      return "Not scheduled for today";
+    }
+    if (isSessionCompleted(schedule._id)) {
+      return "Attendance already taken today";
+    }
+    if (isSessionTimeOver(schedule)) {
+      return "Session time has ended";
+    }
+    return "Not available";
+  };
+
   // Filter schedules
   const getFilteredSchedules = () => {
     if (filter === 'all') return schedules;
@@ -105,7 +159,7 @@ function TeacherSchedules() {
         // Check if any schedule day is today or in the future this week
         return scheduleDays.some(day => {
           const dayIndex = weekDays.indexOf(day);
-          return dayIndex >= todayIndex && !isSessionTimeOver(schedule);
+          return dayIndex >= todayIndex && !isSessionTimeOver(schedule) && !isSessionCompleted(schedule._id);
         });
       }
       return true;
@@ -179,7 +233,10 @@ function TeacherSchedules() {
               Current Time: {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
             <button
-              onClick={fetchSchedules}
+              onClick={() => {
+                fetchSchedules();
+                fetchCompletedSessions();
+              }}
               disabled={refreshing}
               className="group relative overflow-hidden"
             >
@@ -321,6 +378,9 @@ function TeacherSchedules() {
               const isToday = dayStatus === 'today';
               const timeOver = isSessionTimeOver(schedule);
               const activeNow = isSessionActive(schedule);
+              const completed = isSessionCompleted(schedule._id);
+              const buttonDisabled = isStartButtonDisabled(schedule);
+              const disabledReason = getDisabledReason(schedule);
               
               return (
                 <div
@@ -328,7 +388,7 @@ function TeacherSchedules() {
                   className="group relative overflow-hidden"
                 >
                   <div className={`absolute inset-0 rounded-2xl blur opacity-0 group-hover:opacity-20 transition-opacity ${
-                    isToday && !timeOver
+                    isToday && !timeOver && !completed
                       ? 'bg-gradient-to-r from-green-500 to-emerald-500' 
                       : dayStatus === 'upcoming'
                       ? 'bg-gradient-to-r from-blue-500 to-indigo-500'
@@ -340,16 +400,21 @@ function TeacherSchedules() {
                     <div className="p-6 border-b border-gray-200/60 relative">
                       {/* Status Badge */}
                       <div className="absolute top-4 right-4">
-                        {isToday && !timeOver ? (
+                        {isToday && !timeOver && !completed ? (
                           activeNow ? (
                             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg animate-pulse">
                               LIVE NOW
                             </span>
                           ) : (
                             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-yellow-100 to-amber-100 text-amber-800">
-                              {timeOver ? 'TIME OVER' : 'TODAY'}
+                              TODAY
                             </span>
                           )
+                        ) : completed ? (
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-green-100 to-emerald-100 text-green-800">
+                            <FaCheckCircle className="w-3 h-3" />
+                            COMPLETED
+                          </span>
                         ) : dayStatus === 'upcoming' ? (
                           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800">
                             UPCOMING
@@ -409,7 +474,21 @@ function TeacherSchedules() {
                     {/* Footer */}
                     <div className="p-6 bg-gradient-to-r from-gray-50 to-gray-100/30">
                       {isToday ? (
-                        timeOver ? (
+                        completed ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <FaCheckCircle className="w-4 h-4 text-green-600" />
+                              <span className="text-sm font-medium text-green-700">Attendance completed for today</span>
+                            </div>
+                            <button
+                              disabled
+                              className="px-5 py-2.5 bg-gray-300 text-gray-600 font-medium rounded-xl cursor-not-allowed flex items-center gap-2"
+                            >
+                              <FaLock className="w-4 h-4" />
+                              <span>Already Taken</span>
+                            </button>
+                          </div>
+                        ) : timeOver ? (
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
@@ -430,7 +509,7 @@ function TeacherSchedules() {
                               <span className="text-sm font-medium text-green-700">Session is active now!</span>
                             </div>
                             <button
-                              onClick={() => navigate(`/teacher/attendance/${schedule._id}`)}
+                              onClick={() => navigate(`/teacher/start/${schedule._id}`)}
                               className="group relative overflow-hidden inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-xl hover:from-green-700 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 transition-all duration-200 shadow-lg hover:shadow-xl"
                             >
                               <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
@@ -445,7 +524,7 @@ function TeacherSchedules() {
                               <span className="text-sm font-medium text-yellow-700">Class is scheduled today</span>
                             </div>
                             <button
-                              onClick={() => navigate(`/teacher/attendance/${schedule._id}`)}
+                              onClick={() => navigate(`/teacher/start/${schedule._id}`)}
                               className="group relative overflow-hidden inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-all duration-200 shadow-lg hover:shadow-xl"
                             >
                               <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
@@ -474,7 +553,7 @@ function TeacherSchedules() {
                             <span className="text-sm font-medium text-gray-600">Completed</span>
                           </div>
                           <button
-                            onClick={() => navigate(`/teacher/attendance/${schedule._id}`)}
+                            onClick={() => navigate(`/teacher/history/${schedule._id}`)}
                             className="group flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200"
                           >
                             <span>View History</span>
@@ -520,7 +599,7 @@ function TeacherSchedules() {
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold">
-                      {schedules.filter(s => s.days.includes(today) && !isSessionTimeOver(s)).length}
+                      {schedules.filter(s => s.days.includes(today) && !isSessionTimeOver(s) && !isSessionCompleted(s._id)).length}
                     </div>
                     <div className="text-sm text-blue-100">Available Now</div>
                   </div>

@@ -202,7 +202,7 @@ function TeacherAttendanceStart() {
   };
 
   const handleBackToDashboard = () => {
-    navigate("/teacher/dashboard");
+    navigate("/teacher");
   };
 
   // Calculate attendance percentage
@@ -264,12 +264,7 @@ function TeacherAttendanceStart() {
               >
                 Back to Dashboard
               </button>
-              <button
-                onClick={() => window.location.reload()}
-                className="w-full py-3.5 px-4 bg-white border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200"
-              >
-                Start New Session
-              </button>
+              {/* Start New Session button removed as requested */}
             </div>
           </div>
         </div>
